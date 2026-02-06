@@ -1,0 +1,6 @@
+obj/
+bin/
+*.o
+# codeblocks
+*.depend
+*.layout
