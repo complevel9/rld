@@ -34,30 +34,21 @@
 		<Linker>
 			<Add option="-lm" />
 		</Linker>
-		<Unit filename="cartpole.c">
-			<Option compilerVar="CC" />
-		</Unit>
-		<Unit filename="cartpole.h" />
-		<Unit filename="main.c">
-			<Option compilerVar="CC" />
-		</Unit>
-		<Unit filename="mountaincar.c">
-			<Option compilerVar="CC" />
-		</Unit>
-		<Unit filename="mountaincar.h" />
-		<Unit filename="nd_array.c">
-			<Option compilerVar="CC" />
-		</Unit>
-		<Unit filename="nd_array.h" />
-		<Unit filename="nd_array_x.h" />
-		<Unit filename="rl.c">
-			<Option compilerVar="CC" />
-		</Unit>
-		<Unit filename="rl.h" />
-		<Unit filename="sarsa.c">
-			<Option compilerVar="CC" />
-		</Unit>
-		<Unit filename="sarsa.h" />
+		<Unit filename="cartpole.cpp" />
+		<Unit filename="cartpole.hpp" />
+		<Unit filename="commontypes.hpp" />
+		<Unit filename="main.cpp" />
+		<Unit filename="mountaincar.cpp" />
+		<Unit filename="mountaincar.hpp" />
+		<Unit filename="nd_array.cpp" />
+		<Unit filename="nd_array.hpp" />
+		<Unit filename="nd_array_x.hpp" />
+		<Unit filename="rl.cpp" />
+		<Unit filename="rl.hpp" />
+		<Unit filename="sarsa.cpp" />
+		<Unit filename="sarsa.hpp" />
+		<Unit filename="valuefn.cpp" />
+		<Unit filename="valuefn.hpp" />
 		<Extensions />
 	</Project>
 </CodeBlocks_project_file>
