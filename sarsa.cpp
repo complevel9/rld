@@ -1,5 +1,6 @@
-#include "sarsa.h"
+#include "sarsa.hpp"
 
+/*
 Action choose_action(void *ag, State s)
 {
     Action a = {0};
@@ -12,3 +13,4 @@ void update(void *ag, uint t, State s, Action a, real r, State ss,
 }
 
 AgentVT Sarsa_AgentVT = {0};
+*/

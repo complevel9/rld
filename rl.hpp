@@ -1,58 +1,59 @@
 #ifndef HEADER_RL_H_
 #define HEADER_RL_H_
 
-#include <stdbool.h>
-#include "commontypes.h"
+#include "commontypes.hpp"
+#include "nd.hpp"
 
-typedef unsigned int uint;
+#define SA_TEMPL template<typename State, typename Action>
 
-// you get 16 bytes to encode whatever state or action, use the union
-// or typecast them yourself
-// if that's too small, allocate the memory yourself and use the void *p
-// remember to free it afterwards though
-typedef union Generic16 {
-    char str[16];
-    int i;
-    uint ui;
-    float f;
-    double d;
-    void *p;
-} State, Action;
+SA_TEMPL struct Env {
+    virtual void begin_episode() = 0;
+    virtual State start_state() = 0;
+    virtual bool is_terminal(State *s, uint t) = 0;
+    virtual bool transition(uint t, State *s, Action *a, real *reward,
+                            State *ss) = 0;
+};
 
-//typedef struct {
-//
-//} StateVT, ActionVT;
+//template<typename State> struct VFn {};
 
-// environment functions: sample start state, sample transition (also checks
-// if terminal transition)
-typedef struct EnvVT {
-    void  (*begin_episode)(void *env);
-    State (*sample_start) (void *env);
-//  bool  (*is_terminal)  (void *env, State s, uint t);
-    bool  (*transition)   (void *env, State s, Action a, real *reward,
-                           State *ss);
-} EnvVT;
+// Action value smooth parametric approximation
+SA_TEMPL struct QFn {
+    Vec<float> theta;
+    // Q_\theta(s, a)
+    virtual real Q_theta(State *s, Action *a) = 0;
+    // z += \partial Q_\theta(s, a) / partial \theta
+    virtual void dQ_addto(State *s, Action *a, Vec<float> *z) = 0;
+};
 
-// agent functions: choose action, update
-// update is responsible for freeing a state or action
-typedef struct AgentVT {
-    void   (*begin_episode)(void *ag);
-    Action (*choose_action)(void *ag, State s);
-    void   (*update)       (void *ag, uint t, State s, Action a, real r,
-                            State ss, bool is_terminal);
-} AgentVT;
+#define SAQ_TEMPL template<typename State, typename Action, typename QFnI>
 
-// experiemnt setup
-typedef struct {
-    AgentVT agv;
-    EnvVT envv;
-//    StateVT statev;
-//    ActionVT actionv;
-    void *ag, *env;
-} ExperimentSetup;
+SAQ_TEMPL struct Algo {
+    virtual void begin_episode(QFnI *Q) = 0;
+    virtual Action choose_action(State *s) = 0;
+    virtual void update(QFnI *Q, uint t, State *s, Action *a, real r,
+                        State *ss, bool is_terminal) = 0;
+};
 
+template<typename State, typename Action,
+         typename EnvI, typename QFnI, typename AlgoI>
+void run_episode(EnvI env, AlgoI algo,
+                          QFnI Q)
+{
+    bool is_terminal = false;
+    State s = env.start_state();
+    env.begin_episode();
+    algo.begin_episode(&Q);
 
-
-void run_episode(ExperimentSetup es);
+    for (uint t = 0;; t++)
+    {
+        Action a = algo.choose_action(&s);
+        real r;
+        State ss;
+        is_terminal = env.transition(t, &s, &a, &r, &ss);
+        algo.update(&Q, t, &s, &a, r, &ss, is_terminal);
+        if (is_terminal) break;
+        s = ss;
+    }
+}
 
 #endif

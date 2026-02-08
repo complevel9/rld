@@ -1,18 +1,24 @@
-#include "mountaincar.h"
+#include "mountaincar.hpp"
 
-#include <math.h>
+#include <cmath>
+#include <stdlib.h>
 
 // implementation same as gymnasium's mountain car
 
-static MC_State MC_sample_start(void *env)
+void MC_Env::begin_episode()
 {
-    return (MC_State){.x = 0.0f, .vx = 0.0f};
 }
 
-static bool MC_transition(void *env, MC_State s, MC_Action a, real *r, MC_State *ss)
+MC_State MC_Env::start_state()
 {
-    ss->vx += (a - 1)*0.001f - 0.0025f*cosf(3.0f*s.x);
-    ss->x = s.x + ss->vx;
+    MC_State mc = {.x = -0.5f, .vx = 0.0f};
+    return mc;
+}
+
+bool MC_Env::transition(uint t, MC_State *s, MC_Action *a, real *r, MC_State *ss)
+{
+    ss->vx += (*a - 1)*0.001f - 0.0025f*cosf(3.0f*s->x);
+    ss->x = s->x + ss->vx;
     if (ss->x < -1.2f)
     {
         ss->x = -1.2f;
@@ -27,13 +33,12 @@ static bool MC_transition(void *env, MC_State s, MC_Action a, real *r, MC_State 
         return true;
     }
     *r = 0.0f;
+    printf("t=%u:\tx=%.2f\tvx=%.2f", t, ss->x, ss->vx);
+    getchar();
     return false;
 }
 
-// gcc will complain when type punning structs like State,
-// this though, looks more clean
-// (will probably crash with incorrect signature anyways)
-EnvVT MC_EnvVT = {
-    .sample_start = (void*)&MC_sample_start,
-    .transition   = (void*)&MC_transition
-};
+bool MC_Env::is_terminal(MC_State *s, uint t)
+{
+    return s->x >= M_PI/6.f;
+}

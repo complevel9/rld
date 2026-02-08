@@ -1,18 +1,22 @@
 #ifndef HEADER_MOUNTAINCAR_H
 #define HEADER_MOUNTAINCAR_H
 
-#include "rl.h"
+#include "rl.hpp"
 
-typedef struct {
+struct MC_State {
     float x, vx;
-} MC_State;
+};
 
-typedef enum {
+enum MC_Action {
     MC_backward = 0,
     MC_none = 1,
     MC_forward = 2
-} MC_Action;
+};
 
-extern EnvVT MC_EnvVT;
-
+struct MC_Env : Env<MC_State, MC_Action> {
+    void begin_episode();
+    MC_State start_state();
+    bool is_terminal(MC_State *s, uint t);
+    bool transition(uint t, MC_State *s, MC_Action *a, real *reward, MC_State *ss);
+};
 #endif

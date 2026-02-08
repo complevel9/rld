@@ -1,7 +1,7 @@
 #ifndef HEADER_CARTPOLE_H_
 #define HEADER_CARTPOLE_H_
 
-#include "rl.h"
+#include "rl.hpp"
 
 typedef struct {
 

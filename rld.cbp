@@ -40,10 +40,8 @@
 		<Unit filename="main.cpp" />
 		<Unit filename="mountaincar.cpp" />
 		<Unit filename="mountaincar.hpp" />
-		<Unit filename="nd_array.cpp" />
-		<Unit filename="nd_array.hpp" />
-		<Unit filename="nd_array_x.hpp" />
-		<Unit filename="rl.cpp" />
+		<Unit filename="nd.cpp" />
+		<Unit filename="nd.hpp" />
 		<Unit filename="rl.hpp" />
 		<Unit filename="sarsa.cpp" />
 		<Unit filename="sarsa.hpp" />
