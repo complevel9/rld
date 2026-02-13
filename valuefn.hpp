@@ -1,5 +1,5 @@
-#ifndef HEADER_VALUEFN_H_
-#define HEADER_VALUEFN_H_
+#ifndef HEADER_VALUEFN_HPP_
+#define HEADER_VALUEFN_HPP_
 
 #include "nd.hpp"
 #include "rl.hpp"

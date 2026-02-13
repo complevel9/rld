@@ -36,7 +36,8 @@
 		</Linker>
 		<Unit filename="cartpole.cpp" />
 		<Unit filename="cartpole.hpp" />
-		<Unit filename="commontypes.hpp" />
+		<Unit filename="common.cpp" />
+		<Unit filename="common.hpp" />
 		<Unit filename="main.cpp" />
 		<Unit filename="mountaincar.cpp" />
 		<Unit filename="mountaincar.hpp" />

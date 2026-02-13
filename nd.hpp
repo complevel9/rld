@@ -1,24 +1,65 @@
-#ifndef HEADER_ND_ARRAY_H_
-#define HEADER_ND_ARRAY_H_
+#ifndef HEADER_ND_ARRAY_HPP_
+#define HEADER_ND_ARRAY_HPP_
 
-#include "commontypes.hpp"
+#include "common.hpp"
 
 #include <cstdio>
+#include <cstring>
 #include <cstdlib>
 #include <vector>
-#include <cblas.h>
 
-template<typename T> struct NdArray {
+#define DELETE_COPY_CTOR_ASSIGN_T(a, b) \
+    a(const a<b>&) = delete;\
+    a<b>& operator=(const a<b>&) = delete;
+
+template<class T> struct Vec {
+    uint size;
+    T *data;
+    T& operator[](uint i) { return data[i]; }
+    Vec() {}
+    Vec(uint size_) : size(size_), data(new T[size_]()) {}
+    ~Vec() {delete[] data;}
+    DELETE_COPY_CTOR_ASSIGN_T(Vec,T)
+    void zero()
+    {
+        memset(data, 0, size * sizeof(T));
+    }
+    // cblasable
+    void scale(T a)
+    {
+        for (uint i = 0; i < size; i++)
+            data[i] *= a;
+    }
+    void add_scaled(T a, Vec<T> *v)
+    {
+        for (uint i = 0; i < size; i++)
+            data[i] += a*v->data[i];
+    }
+    void add(Vec<T> *v)
+    {
+        for (uint i = 0; i < size; i++)
+            data[i] += v->data[i];
+    }
+    void set_all(T v) {
+        for (uint i = 0; i < size; i++)
+            data[i] = v;
+    }
+};
+
+template<class T> struct NdArray {
     T *data;
     uint *dim;
     uint ndim;
-    uint vol;
+    uint size;
+    bool is_view;
 
-    NdArray(uint ndim_, uint *dim_);
+    NdArray(Vec<T> *v, uint ndim_, uint *dim_);
+    NdArray(Vec<T> *v, uint ndim_, ...);
     ~NdArray();
-    NdArray(const NdArray<T>&) = delete;
-    NdArray<T>& operator=(const NdArray<T>&) = delete;
+    DELETE_COPY_CTOR_ASSIGN_T(NdArray,T)
+    uint flatpos(uint i, ...);
     T& operator[](uint *ilist);
+    T& at(uint i, ...);
     void print_dim();
 };
 
@@ -49,14 +90,9 @@ struct CartesianProduct : Set {
 };
 */
 
-template<typename T> struct Vec {
-    T *data;
-    uint dim;
-    T lazyscale;
-};
 
 
-template<typename T> struct SparseVec {
+template<class T> struct SparseVec {
     uint *idx;
     T *data;
     uint dim;
@@ -67,7 +103,7 @@ template<typename T> struct SparseVec {
 //extern template struct NdArray<int>;
 extern template struct NdArray<float>;
 //extern template struct NdArray<double>;
-extern template struct Vec<float>;
-extern template struct SparseVec<float>;
+//extern template struct Vec<float>;
+//extern template struct SparseVec<float>;
 
 #endif
