@@ -33,6 +33,9 @@
 		</Compiler>
 		<Linker>
 			<Add option="-lm" />
+			<Add option="-lallegro" />
+			<Add option="-lallegro_primitives" />
+			<Add option="-lallegro_font" />
 		</Linker>
 		<Unit filename="cartpole.cpp" />
 		<Unit filename="cartpole.hpp" />

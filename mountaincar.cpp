@@ -34,10 +34,16 @@ bool MC_Env::transition(uint t, MC_State *s, MC_Action *a, real *r, MC_State *ss
         return true;
     }
     best = std::max(best, ss->x);
-    *r = 0.0f;
-//    if (t > 14000)
-//        printf("t=%u:\t a=%u \t x=%.2f \t vx=%.2f \t best=%.2f \n", t, *a, ss->x, ss->vx, best);
-    //getchar();
+    *r = MC_TIME_REWARD;
+
+    extern bool logmc;
+    if (logmc) {
+        extern bool greedy;
+        printf("%c t=%u: a=%4u  x=%5.2f  vx=%5.2f  best=%5.2f  \n", greedy ? '*' : ' ', t, *a, ss->x, ss->vx, best);
+        greedy = false;
+//        if (t % 20 == 0)
+//            getchar();
+    }
     return false;
 }
 

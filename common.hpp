@@ -4,6 +4,8 @@
 typedef unsigned int uint;
 typedef float real;
 
+#define szp(x) printf("sizeof " #x " %lu\n", sizeof(x))
+
 #define sigtrap() asm volatile ("int $3")// int 0x03
 
 template<class T> T clamp(T x, T a, T b)

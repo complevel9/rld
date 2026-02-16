@@ -12,6 +12,7 @@ bool bernouli(float pr) {
 }
 
 #define FLOAT_TOLERANCE 0.0000002f
+bool greedy = false;
 
 template<class EnvI, class QFnI>
 struct EpsilonGreedy {
@@ -36,6 +37,7 @@ struct EpsilonGreedy {
         float max_value = -999999999999.0f;
 
         // greedy
+        greedy = true;
         for (uint i = 0; i < n; i++)
         {
             float value = Q->Q_theta(s, &i);
@@ -140,12 +142,24 @@ template<class EnvI, class QFnI, class Policy> struct SarsaLambda_Algo : Algo<En
 struct Mat : NdArray<float> {
     Mat(uint m_, uint n_) : NdArray(nullptr, 2, m_, n_) {}
     Mat(uint m_) : Mat(m_, m_) {}
-    void set_diag(float v)
+    void set_diag_all(float v)
     {
         uint m = dim[1] < dim[0] ? dim[0] : dim[1];
         for (uint i = 0; i < m; i++)
-        {
             data[i + i*m] = v;
+    }
+    void print() {
+        for (uint i = 0; i < dim[0]; i++)
+        {
+            for (uint j = 0;  j < dim[1]; j++)
+            {
+                float f = data[i*dim[1] + j];
+                if (fabs(f) < 0.001f)
+                    printf("(    ) ");
+                else
+                    printf("(%4.1f) ", f);
+            }
+            putchar('\n');
         }
     }
 };
@@ -158,8 +172,11 @@ void Av(Mat *A, Vec<float> *v, Vec<float> *dest)
     if ((v->size != n) | (dest->size != m))
         exit(56);
     for (uint i = 0; i < m; i++)
+    {
+        dest->data[i] = 0.0f;
         for (uint j = 0; j < n; j++)
             dest->data[i] += A->data[i*n + j] * v->data[j];
+    }
 }
 
 // A^T_{n x m}
@@ -170,8 +187,11 @@ void ATv(Mat *A, Vec<float> *v, Vec<float> *dest)
     if ((v->size != m) | (dest->size != n))
         exit(57);
     for (uint j = 0; j < n; j++)
+    {
+        dest->data[j] = 0.0f;
         for (uint i = 0; i < m; i++)
             dest->data[j] += A->data[j*m + i] * v->data[i];
+    }
 }
 
 // uvT
@@ -234,7 +254,9 @@ template<class EnvI, class QFnI, class Policy> struct NatSarsaLambda_Algo : Algo
     void begin_episode(State *s)
     {
         elig.zero();
-        G_inv.set_diag(1.0f);
+        G_inv.set_diag_all(1.0f);
+//        for (uint i = 0; i < G_inv.dim[0]*G_inv.dim[1]; i++)
+//            printf("%.0f ", G_inv.data[i]);
         action = pi->choose_action(s);
     }
 
@@ -263,12 +285,37 @@ template<class EnvI, class QFnI, class Policy> struct NatSarsaLambda_Algo : Algo
 
         Av(&G_inv, &g, &v1); // v1 = G^{-1} g
         ATv(&G_inv, &g, &v2); // v2 = G^{-T} g
-        float scale = -delta * delta / (1 + delta*delta*inner(&v1, &v2));
+        float scale = -delta * delta / (1 + delta*delta*inner(&g, &v1));
         outer_scaled_addto(&v1, &v2, scale, &G_inv);
+        Av(&G_inv, &elig, &v1); // v1 = G^{-1} e
 
-        // v2 = G^{-1} e
-        Av(&G_inv, &elig, &v1);
+#define floateq(a,b) ((a - FLOAT_TOLERANCE <= b) & (b <= a + FLOAT_TOLERANCE))
+
+        G_inv.print();
+        g.print();
+        printf("delta=%f\n", delta);
+//        printf("scale=%f\n", scale);
+//        float d = inner(&v1, &elig);
+//        if (d <= 0)
+//        {
+//            puts("WTF NOT POSITIVE DEFINITE");
+//            for (uint j = 0; j < elig.size; j++)
+//                printf("[%3u] %c %.5f , %.5f\n", j, floateq(elig[j], v1[j]) ? ' ' : '*', elig[j], v1[j]);
+//            sigtrap();
+//            puts("what");
+//        }
+
+//        for (uint i = 0; i < elig.size; i++)
+//            if (!floateq(elig[i], v1[i]))
+//            {
+//                printf("wtf??\n");
+//                for (uint j = 0; j < elig.size; j++)
+//                    printf("[%3u] %c %.5f , %.5f\n", j, floateq(elig[j], v1[j]) ? ' ' : '*', elig[j], v1[j]);
+//                getchar();
+//                break;
+//            }
         Q->theta.add_scaled(alpha * delta, &v1);
+//        Q->theta.add_scaled(alpha * delta, &elig);
     }
 };
 /*      float delta = r - Q->Q_theta(s, a);

@@ -87,12 +87,26 @@ template<class T> T& NdArray<T>::operator[](uint *ilist) {
     return data[flatpos];
 }
 
-template<class T> T& NdArray<T>::at(uint i, ...) {
+template<class T> T& NdArray<T>::at(uint fi, ...) {
+    uint flatpos = 0;
     va_list list;
-    va_start(list, i);
-    uint flatpos_ = flatpos(i, list);
+    va_start(list, fi);
+
+    for (uint i = 0; i < ndim; i++)
+    {
+        uint c = i == 0 ? fi : va_arg(list, uint);
+        if (c >= dim[i])
+        {
+            fprintf(stderr, "index #%u is %u out of range of %u",
+                    i+1, c, dim[i]);
+            sigtrap();
+        }
+        flatpos += c;
+        if (i == ndim - 1) break;
+        flatpos *= dim[i+1];
+    }
     va_end(list);
-    return data[flatpos_];
+    return data[flatpos];
 }
 
 template<class T> uint NdArray<T>::flatpos(uint fi, ...) {

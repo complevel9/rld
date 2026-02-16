@@ -6,6 +6,7 @@
 constexpr float MC_FORCE = 0.001f, MC_GRAV = 0.0025f,
                 MC_LEFT = -1.2f, MC_RIGHT = 3.1415926535897932f/6.f,
                 MC_SPEED_MAX = 0.07,
+                MC_TIME_REWARD = -1.0f,
                 MC_WIN_REWARD = 100.0f;
 
 struct MC_State {

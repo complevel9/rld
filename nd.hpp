@@ -40,9 +40,16 @@ template<class T> struct Vec {
         for (uint i = 0; i < size; i++)
             data[i] += v->data[i];
     }
-    void set_all(T v) {
+    void set_all(T v)
+    {
         for (uint i = 0; i < size; i++)
             data[i] = v;
+    }
+    void print()
+    {
+        for (uint i = 0; i < size; i++)
+            printf("(%.2f) ", data[i]);
+        putchar('\n');
     }
 };
 
