@@ -105,16 +105,16 @@ template<class EnvI, class QFnI, class Policy> struct SarsaLambda_Algo : Algo<En
     Action action;
     QFnI *Q;
     Policy *pi;
-    Vec<float> z;
+    Vec<float> elig;
     SarsaLambda_Algo(float alpha_, float gamma_, float lambda_, QFnI *Q_,
                      Policy *pi_)
         : alpha(alpha_), gamma(gamma_), lambda(lambda_), Q(Q_),
-          pi(pi_), z(Q_->theta.size)
+          pi(pi_), elig(Q_->theta.size)
     { }
 
     void begin_episode(State *s)
     {
-        z.zero();
+        elig.zero();
         action = pi->choose_action(s);
     }
 
@@ -127,15 +127,15 @@ template<class EnvI, class QFnI, class Policy> struct SarsaLambda_Algo : Algo<En
                 bool is_terminal)
     {
         float delta = r - Q->Q_theta(s, a);
-        Q->dQ_addto(s, a, &z);
+        Q->dQ_addto(s, a, &elig);
         if (is_terminal) {
-            Q->theta.add_scaled(alpha * delta, &z);
+            Q->theta.add_scaled(alpha * delta, &elig);
             return;
         }
         action = pi->choose_action(s);
         delta += gamma * Q->Q_theta(ss, &action);
-        Q->theta.add_scaled(alpha * delta, &z);
-        z.scale(gamma * lambda);
+        Q->theta.add_scaled(alpha * delta, &elig);
+        elig.scale(gamma * lambda);
     }
 };
 
@@ -318,16 +318,62 @@ template<class EnvI, class QFnI, class Policy> struct NatSarsaLambda_Algo : Algo
 //        Q->theta.add_scaled(alpha * delta, &elig);
     }
 };
-/*      float delta = r - Q->Q_theta(s, a);
-        Q->dQ_addto(s, a, &z);
-        if (is_terminal) {
-            Q->theta.add_scaled(alpha * delta, &z);
-            return;
-        }
+
+template<class EnvI, class QFnI, class Policy> struct GCSarsaLambda_Algo : Algo<EnvI, QFnI> {
+    typedef typename EnvI::State State;
+    typedef typename EnvI::Action Action;
+
+    float alpha;
+    float gamma;
+    float eta;
+    Action action;
+    QFnI *Q;
+    Policy *pi;
+    Vec<float> elig, g;
+    float Qssaa;
+    GCSarsaLambda_Algo(float alpha_, float gamma_, float eta_, QFnI *Q_,
+                     Policy *pi_)
+        : alpha(alpha_), gamma(gamma_), eta(eta_), Q(Q_),
+          pi(pi_), elig(Q_->theta.size), g(Q_->theta.size)
+    { }
+
+    void begin_episode(State *s)
+    {
+        elig.zero();
         action = pi->choose_action(s);
-        delta += gamma * Q->Q_theta(ss, &action);
-        Q->theta.add_scaled(alpha * delta, &z);
-        z.scale(gamma * lambda);
-*/
+    }
+
+    Action choose_action(State *s)
+    {
+        return action;
+    }
+
+    void update(uint t, State *s, Action *a, real r, State *ss,
+                bool is_terminal)
+    {
+        // reduces 1 Q lookup with 1 if
+        float Qsa = Qssaa;
+        if (t == 0)
+            Qsa = Q->Q_theta(s, a);
+        float delta = r - Qsa;
+        float delta_f = -Qsa;
+        if (!is_terminal)
+        {
+            action = pi->choose_action(s);
+            Qssaa = Q->Q_theta(ss, &action);
+            delta += gamma * Qssaa;
+            delta_f += Qssaa;
+        }
+
+        Q->dQ(s, a, &g);
+
+        float eligscale = eta*(gamma*delta + delta_f);
+        for (uint i = 0; i < elig.size; i++)
+        {
+            Q->theta.data[i] += alpha * delta * g.data[i] + eligscale*elig[i];
+            elig.data[i] = gamma*elig.data[i] + alpha*g.data[i];
+        }
+    }
+};
 
 #endif

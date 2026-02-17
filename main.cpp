@@ -101,16 +101,19 @@ template<class EnvI, class QFnI> struct Stupid_Algo : Algo<EnvI,QFnI> {
 };
 
 MC_Env mcenv;
-MCAggregateQFn Q_agg(3, 5);
+MCAggregateQFn Q_agg(4, 2);
 //MCDirectFeatureLinearQFn Q;
 EpsilonGreedy<MC_Env, MCAggregateQFn> epgreedy;
 SarsaLambda_Algo<MC_Env, MCAggregateQFn, EpsilonGreedy<MC_Env,MCAggregateQFn>>        sarsa_lambda(0.02, 0.99, 0.95, &Q_agg, &epgreedy);
 NatSarsaLambda_Algo<MC_Env, MCAggregateQFn, EpsilonGreedy<MC_Env,MCAggregateQFn>> nat_sarsa_lambda(0.02, 0.99, 0.95, &Q_agg, &epgreedy);
+GCSarsaLambda_Algo<MC_Env, MCAggregateQFn, EpsilonGreedy<MC_Env,MCAggregateQFn>>   gc_sarsa_lambda(0.02, 0.99, 0.10, &Q_agg, &epgreedy);
+
 uint ep = 0, t = 0;
 
 auto env = &mcenv;
 //auto algo = &sarsa_lambda;
-auto algo = &nat_sarsa_lambda;
+//auto algo = &nat_sarsa_lambda;
+auto algo = &gc_sarsa_lambda;
 auto Q = algo->Q;
 
 typedef MC_State State;
