@@ -1,6 +1,8 @@
+main*
+!main.c
+
 obj/
 bin/
 *.o
-# codeblocks
-*.depend
-*.layout
+gmon*
+*.txt
