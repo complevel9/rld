@@ -179,20 +179,21 @@ void Av(Mat *A, Vec<float> *v, Vec<float> *dest)
     }
 }
 
+// WRONG!!!
 // A^T_{n x m}
-void ATv(Mat *A, Vec<float> *v, Vec<float> *dest)
-{
-    uint m = A->dim[0];
-    uint n = A->dim[1];
-    if ((v->size != m) | (dest->size != n))
-        exit(57);
-    for (uint j = 0; j < n; j++)
-    {
-        dest->data[j] = 0.0f;
-        for (uint i = 0; i < m; i++)
-            dest->data[j] += A->data[j*m + i] * v->data[i];
-    }
-}
+//void ATv(Mat *A, Vec<float> *v, Vec<float> *dest)
+//{
+//    uint m = A->dim[0];
+//    uint n = A->dim[1];
+//    if ((v->size != m) | (dest->size != n))
+//        exit(57);
+//    for (uint j = 0; j < n; j++)
+//    {
+//        dest->data[j] = 0.0f;
+//        for (uint i = 0; i < m; i++)
+//            dest->data[j] += A->data[j*m + i] * v->data[i];
+//    }
+//}
 
 // uvT
 void outer(Vec<float> *u, Vec<float> *v, Mat *dest)
@@ -237,7 +238,7 @@ template<class EnvI, class QFnI, class Policy> struct NatSarsaLambda_Algo : Algo
     float gamma;
     float lambda;
     Vec<float> elig, g;
-    Vec<float> v1, v2; // scratch
+    Vec<float> v1; // scratch
     Mat G_inv;
     Action action;
     QFnI *Q;
@@ -246,7 +247,7 @@ template<class EnvI, class QFnI, class Policy> struct NatSarsaLambda_Algo : Algo
                      Policy *pi_)
         : alpha(alpha_), gamma(gamma_), lambda(lambda_),
           elig(Q_->theta.size), g(Q_->theta.size),
-          v1(Q_->theta.size), v2(Q_->theta.size),
+          v1(Q_->theta.size),
           G_inv(Q_->theta.size),
           Q(Q_), pi(pi_)
     { }
@@ -284,9 +285,9 @@ template<class EnvI, class QFnI, class Policy> struct NatSarsaLambda_Algo : Algo
         }
 
         Av(&G_inv, &g, &v1); // v1 = G^{-1} g
-        ATv(&G_inv, &g, &v2); // v2 = G^{-T} g
+        // ATv(&G_inv, &g, &v2); // v2 = G^{-T} g
         float scale = -delta * delta / (1 + delta*delta*inner(&g, &v1));
-        outer_scaled_addto(&v1, &v2, scale, &G_inv);
+        outer_scaled_addto(&v1, &v1, scale, &G_inv);
         Av(&G_inv, &elig, &v1); // v1 = G^{-1} e
 
 #define floateq(a,b) ((a - FLOAT_TOLERANCE <= b) & (b <= a + FLOAT_TOLERANCE))

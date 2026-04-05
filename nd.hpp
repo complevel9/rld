@@ -70,43 +70,63 @@ template<class T> struct NdArray {
     void print_dim();
 };
 
-/*
-struct Set {
-    enum SetType {
-        finite, range, cartesian_product
-    } type;
-};
+typedef struct SVEntry_s {
+    uint idx;
+    float val;
+} SVEntry;
+typedef struct SparseVec_s {
+    SVEntry *entries;
+    uint nentries;
+    uint cap;
+} SparseVec;
 
-struct Elem {
-    Set *parent;
-};
-
-struct Finite : Set {
+typedef struct Discrete_s {
     uint n;
-};
+} Discrete; // { 0...n-1 }
+typedef struct Range_s {
+    real a, b;
+} Range; // [a, b]
 
-struct Range : Set {
-    float a, b;
-    Range(float a, float b);
-    void print();
-};
+typedef union SimpleSet_s {
+    Discrete discrete;
+    Range range;
+} SimpleSet;
+typedef union SimpleElem_s {
+    uint i;
+    real r;
+} SimpleElem;
 
-struct CartesianProduct : Set {
-    std::vector<Set> *prod;
-    void print();
-};
+// cartesian product of simple sets
+typedef struct Space_s {
+    SimpleSet *factors;
+    uint nfactors;
+} Space;
+typedef struct Elem_s {
+    SimpleElem *components;
+    Space *space;
+    uint ncomponents;
+} Elem;
+
+typedef enum OOBBehavior_e {
+    OOBB_CLAMP, OOBB_LOOP, OOBB_DIE
+} OOBBehavior;
+typedef struct UniformRangeSplitAggregator_s {
+     OOBBehavior oob_behavior;
+     real a, b;
+     uint nsplits;
+} UniformRangeSplitAggregator;
+
+typedef struct AggregatorSequenceFeatures_s {
+} AggregatorSequenceFeatures;
+/*
+mcsfeatures = aggregator sequence features ( [uniform range splitting(), ] )
+vec theta = vec(mcfeatures.dim)
+for a in env.actions(s)
+    real value = mcfapprox.get(mcfeatures.apply([...s, ...a]))
+
+vec grad = mcfapprox.get()
+
 */
-
-
-
-template<class T> struct SparseVec {
-    uint *idx;
-    T *data;
-    uint dim;
-    uint num_entries;
-};
-
-
 //extern template struct NdArray<int>;
 extern template struct NdArray<float>;
 //extern template struct NdArray<double>;
