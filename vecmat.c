@@ -1,6 +1,6 @@
 // -------------------- Vec and Mat ---------------------------
 
-// for some faster matrix/vec math
+// OpenBLAS for some faster matrix/vec math
 #if 1
     #include <cblas.h>
     #define HAS_CBLAS 1
@@ -23,6 +23,19 @@
         #define cblas_gemv cblas_dgemv
         #define cblas_symv cblas_dsymv
     #endif
+
+    const char *openblas_parallel_str() {
+        int openblas_parallel = openblas_get_parallel();
+        switch (openblas_parallel) {
+        case OPENBLAS_SEQUENTIAL:
+            return "sequential";
+        case OPENBLAS_THREAD:
+            return "pthread";
+        case OPENBLAS_OPENMP:
+            return "openmp";
+        }
+        return "unknown";
+    }
 #else
     #define HAS_CBLAS 0
 #endif

@@ -5,7 +5,11 @@ EXTRA_FLAGS=
 DEBUG_FLAGS=
 
 main: main.c
-	gcc $^ -O3 -ffast-math -s $(CFLAGS) $(EXTRA_FLAGS) $(LIB) -o $@
+	gcc $^ -O2 -ffast-math $(CFLAGS) $(EXTRA_FLAGS) $(LIB) -o $@
+
+mainf: main.c
+	gcc $^ -O3 -ffast-math -mtune=native -march=native \
+		$(CFLAGS) $(EXTRA_FLAGS) $(LIB) -o $@
 
 maind: main.c
 	gcc $^ -O0 -g $(DEBUG_FLAGS) $(CFLAGS) $(EXTRA_FLAGS) $(LIB) -o $@
@@ -14,4 +18,4 @@ mainprof: main.c
 	gcc $^ -O2 $(CFLAGS) $(EXTRA_FLAGS) $(LIB) -pg -o $@
 
 clean:
-	rm -f main maind mainprof
+	rm -f main mainf maind mainprof

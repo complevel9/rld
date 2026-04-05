@@ -47,8 +47,7 @@ void EpGreedy_choose_action(void *self_, RngState *rng, Elem *S, Elem *A) {
     Space aspace = self->super.env->SVT_ACCESS fixed_action_space;
     uint nfactors = aspace.nfactors;
     if (rand_bernoulli(rng, self->epsilon)) {
-        // ignore RAND_MAX bias, it's negligible
-        // assume rand() calls are cheap
+        // ignore bias from u64 max, it's negligible
         for (uint i = 0; i < nfactors; i++)
             A->x[i].i = rand_u64(rng) % aspace.factors[i].as.discrete.n;
         // printf("Epgreedy explore: ");

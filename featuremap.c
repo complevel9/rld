@@ -104,22 +104,12 @@ void FourierBasis_map(void *self_, Elem *x, Vec *dest) {
         xnormal[i] = (x->x[i].r - range.a)
                    / (range.b - range.a);
     }
-    // "fortran order"
+
     uint last_changed = 0;
     for (uint iter = 0;;) {
-        // printf("iter %u:", iter);
-        // for (uint i = 0; i < d; i++)
-        //     printf(" %u/%u", cur_coeffs[i], self->orders[i]);
 
         real xdotc = xnormal[last_changed]*cur_coeffs[last_changed]
                          + cum_sum[last_changed];
-        // printf("\n\tx.c=%.6g\n", xdotc);
-        // printf("\tlc=%u\n", last_changed);
-        // printf("\txnormal[lc]=%.6g\n", xnormal[last_changed]);
-        // printf("\tcumsum=");
-        // for (uint i = 0; i < d; i++)
-        //     printf("%.4g, ", cum_sum[i]);
-        // printf("\n\n");
 
         dest->data.dense[iter] = cosf(M_PI * xdotc);
 
@@ -127,9 +117,8 @@ void FourierBasis_map(void *self_, Elem *x, Vec *dest) {
         if (iter == self->super.outdim)
             break;
 
-        for (uint i = 0; i < last_changed; i++) {
+        for (uint i = 0; i < last_changed; i++)
             cum_sum[i] = xdotc;
-        }
 
         cur_coeffs[0]++;
         last_changed = 0;

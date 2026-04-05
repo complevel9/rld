@@ -43,6 +43,8 @@ typedef uint8_t uchar;
 
 // -------------------- RNG -----------------------------------
 
+// having any custom, inlinable rng is way faster than going to glibc
+// just due to cache thrashing in parallel code alone
 // xorshiro256++ from https://prng.di.unimi.it/xoshiro256plusplus.c
 static inline uint64_t rotl(const uint64_t x, int k) {
     return (x << k) | (x >> (64 - k));
@@ -119,13 +121,39 @@ extern inline bool req_arr(real *a, real *b, uint n, real ep) {
     return true;
 }
 
+// don't use this it's slower than libm's cosf()
+#if 0
+    static inline
+    float cosf_x87(float x) {
+        register double result;
+        __asm__ __volatile__ inline (
+            "fcos"
+            : "=t" (result)
+            : "0" (x)
+        );
+        return result;
+    }
+    static inline
+    double cos_x87(double x) {
+        register double result;
+        __asm__ __volatile__ inline (
+            "fcos"
+            : "=t" (result)
+            : "0" (x)
+        );
+        return result;
+    }
+    #define cosf cosf_x87
+    #define cos  cos_x87
+#endif
+
 
 // -------------------- Distributions -------------------------
 
 extern inline bool rand_bernoulli(RngState *s, float pr) {
     if (pr <= 0.f) return 0;
     if (pr >= 1.f) return 1;
-    return rand()/(float)RAND_MAX < pr;
+    return rand_real(s) < pr;
     // return rand_float(s) < pr;
 }
 extern inline real rand_uniform(RngState *s, real a, real b) {
@@ -142,6 +170,8 @@ extern inline real rand_exprange(RngState *s, real a, real b) {
 #define print_sizeof(x) printf("sizeof " #x " = %lu\n", sizeof(x))
 #define print_expr(x,fmt) printf( #x " = " fmt "\n", (x))
 #define sigtrap() asm volatile ("int $3")// int 0x03
+
+// -------------------- Miscellaneous -------------------------
 
 // somethings wrong if more than this much mem is being allocated
 #define MALLOC_MAX (1024*40)

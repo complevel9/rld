@@ -344,6 +344,8 @@ typedef struct {
     void (*free_exp)(Environment **env, Agent **ag, uint agi, HParam *hpt);
     HParam **best_hpt_for_ag;
     uint nagents;
+    uint nepisodes;
+    uint ntrials;
 } Experiment;
 
 
@@ -470,9 +472,13 @@ void mcar_lin_fb_vis(Environment *env_, Agent *ag_, Elem *S, Elem *A, float R,
     al_flip_display();
 }
 
-
-
 int main(int argc, char **argv) {
+    #ifdef _OPENMP
+        puts("OpenMP is enabled");
+    #endif
+    #if HAS_CBLAS
+        printf("OpenBLAS threading model: %s\n", openblas_parallel_str());
+    #endif
     // #define tmin 1000
     // #define tmax 1
     // uint c[1 + (tmax > tmin ? tmax : tmin)] = {0};
@@ -598,6 +604,7 @@ int main(int argc, char **argv) {
             real best_ret_mean = FLOAT_VERY_SMALL;
 
 #ifdef _OPENMP
+            // note that inside omp parallel, OpenBLAS always use 1 thread
             #pragma omp parallel default(firstprivate) shared(best_ret_mean)
             {
                 int tid = omp_get_thread_num();
