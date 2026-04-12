@@ -75,7 +75,7 @@ typedef struct {
 void make_vec(Vec *v, uint dim, ushort sparse_cap) {
     // assert(dim); // dim = 0 means no allocation
     if (!dim) {
-        v->data.dense = 0;
+        v->data.dense = NULL;
         return;
     }
     v->dim = dim;

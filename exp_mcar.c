@@ -34,14 +34,18 @@ void make_mcar_experiment(Environment **env, Agent **ag, uint agi,
         *ag = (Agent*) rg;
     } break;
     case 1: {
+        QTNatResidualGrad *qnrg = custom_malloc(sizeof *qnrg);
+        make_QTNatResidualGrad(qnrg, *env, qfn, (Policy*)epgreedy,
+            hpt[1].r, hpt[2].r);
+        *ag = (Agent*) qnrg;
     } break;
-    case 2: {
+    case 3: {
         SarsaLambda *sl = custom_malloc(sizeof *sl);
         make_SarsaLambda(sl, *env, qfn, (Policy*)epgreedy,
             hpt[1].r, hpt[2].r, hpt[3].r);
         *ag = (Agent*) sl;
     } break;
-    case 3: {
+    case 4: {
         QTNatSarsaLambda *qnsl = custom_malloc(sizeof *qnsl);
         make_QTNatSarsaLambda(qnsl, *env, qfn, (Policy*)epgreedy,
             hpt[1].r, hpt[2].r, hpt[3].r);
@@ -62,15 +66,19 @@ void free_mcar_experiment(Environment *env_, Agent *ag_, uint agi) {
         qfn = (QFn*) ag->qfn;
         free_ResidualGrad(ag);
     } break;
-    // case 1: {
-    // } break;
-    case 2: {
+    case 1: {
+        QTNatResidualGrad *ag = (QTNatResidualGrad*) ag_;
+        epgreedy = (EpGreedy*) ag->pi;
+        qfn = (QFn*) ag->qfn;
+        free_QTNatResidualGrad(ag);
+    } break;
+    case 3: {
         SarsaLambda *ag = (SarsaLambda*) ag_;
         epgreedy = (EpGreedy*) ag->pi;
         qfn = (QFn*) ag->qfn;
         free_SarsaLambda(ag);
     } break;
-    case 3: {
+    case 4: {
         QTNatSarsaLambda *ag = (QTNatSarsaLambda*) ag_;
         epgreedy = (EpGreedy*) ag->pi;
         qfn = (QFn*) ag->qfn;
@@ -103,6 +111,8 @@ void free_mcar_experiment(Environment *env_, Agent *ag_, uint agi) {
     free_MountainCar((MountainCar*)env_);
     free(env_);
 }
+
+// -------------------- Visualization --------------------------
 
 void mcar_exp_fb_vis(Environment *env_, Agent *ag_, Elem *S, Elem *A, float R,
                      Elem *nS, uint t, void *ep_) {
@@ -232,7 +242,7 @@ Experiment mcar_exp = {
     .free_exp = free_mcar_experiment,
     .visfn = mcar_exp_fb_vis,
     .steps_per_vis = 2,
-    .nagents = 1, // <-------------------------------------- testing
+    .nagents = 6, // <-------------------------------------- testing
     .nepisodes = 15,
     .ntrials = 10,
 
@@ -249,11 +259,20 @@ Experiment mcar_exp = {
                 {"gam", rand_1m_exprange_writo, {{.range={5e-4, 0.9}}, 'r'}},
             }
         },
-        { // nat rg
+        { // qtnat rg
             .nhparams = 3,
             .hparam_search = (HParamSearch[]) {
                 {"eps", rand_exprange_writo, {{.range={1e-5, 0.3}}, 'r'}},
                 {"alp", rand_exprange_writo, {{.range={1e-4, 0.1}}, 'r'}},
+                {"gam", rand_1m_exprange_writo, {{.range={5e-4, 0.9}}, 'r'}},
+            }
+        },
+        { // ltnat rg
+            .nhparams = 4,
+            .hparam_search = (HParamSearch[]) {
+                {"eps", rand_exprange_writo, {{.range={1e-5, 0.3}}, 'r'}},
+                {"alp", rand_exprange_writo, {{.range={1e-4, 0.1}}, 'r'}},
+                {"bet", rand_1m_exprange_writo, {{.range={5e-4, 0.9}}, 'r'}},
                 {"gam", rand_1m_exprange_writo, {{.range={5e-4, 0.9}}, 'r'}},
             }
         },
@@ -267,10 +286,11 @@ Experiment mcar_exp = {
             }
         },
         { // qt nat sl
-            .nhparams = 4,
+            .nhparams = 5,
             .hparam_search = (HParamSearch[]) {
                 {"eps", rand_exprange_writo, {{.range={1e-5, 0.3}}, 'r'}},
                 {"alp", rand_exprange_writo, {{.range={5e-4, 0.1}}, 'r'}},
+                {"bet", rand_exprange_writo, {{.range={5e-4, 0.1}}, 'r'}},
                 {"gam", rand_1m_exprange_writo, {{.range={1e-4, 0.9}}, 'r'}},
                 {"lam", rand_1m_exprange_writo, {{.range={1e-4, 0.9}}, 'r'}},
             }
@@ -279,11 +299,15 @@ Experiment mcar_exp = {
     .best_hpt_for_ag = (HParam*[]) {
         (HParam[]) // rg;
         {{.r=0.0001}, {.r=0.002}, {.r=0.995}},
-        (HParam[]) // nat rg;
+        (HParam[]) // qtnat rg;
         {{.r=0.0001}, {.r=0.002}, {.r=0.995}},
+        (HParam[]) // ltnat rg;
+        {},
         (HParam[]) // sl; mean ret=-195.18
         {{.r=0.00005241}, {.r=0.06805436}, {.r=0.99874651}, {.r=0.38837796}},
-        (HParam[]) // qtnatsl; mean ret=-167.16
+        (HParam[]) // qtnat sl; mean ret=-167.16
         {{.r=0.00008165}, {.r=0.07211637}, {.r=0.99987674}, {.r=0.61488545}},
+        (HParam[]) // ltnat sl;
+        {},
     }
 };

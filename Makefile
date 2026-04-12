@@ -9,7 +9,7 @@ main: *.c
 	gcc $(MONOLITHIC_MAIN) -O2 -ffast-math $(CFLAGS) $(EXTRA_FLAGS) $(LIB) -o $@
 
 mainf: *.c
-	gcc $(MONOLITHIC_MAIN) -DNDEBUG -O3 -ffast-math -mtune=native -march=native \
+	gcc $(MONOLITHIC_MAIN) -g -DNDEBUG -O3 -ffast-math -mtune=native -march=native \
 		$(CFLAGS) $(EXTRA_FLAGS) $(LIB) -o $@
 
 maind: *.c

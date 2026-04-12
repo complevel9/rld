@@ -101,18 +101,13 @@ void destroy_allegro() {
     allegro_active = false;
 }
 
+#define AG_START 0
+#define AG_END 2
+
 #include "colormap.c"
 
 #include "experiment.c"
-
-
-
-// -------------------- Visualization --------------------------
-
-
 #include "exp_mcar.c"
-
-
 
 int main(int argc, char **argv) {
     #ifdef _OPENMP

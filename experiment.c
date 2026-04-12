@@ -168,7 +168,12 @@ uint run_episode(RngState *rngs, Environment *env, Agent *ag, real *outG,
 
 
 void search_hpt(Experiment *exp, RngState *base_rngs) {
-    for (uint agi = 0; agi < exp->nagents; agi++) {
+#ifdef AG_START
+    for (uint agi = AG_START; agi < AG_END; agi++)
+#else
+    for (uint agi = 0; agi < exp->nagents; agi++)
+#endif
+    {
         HParamsTupleSearch hpts = exp->hptss[agi];
 
         HParam *best_hpt = exp->best_hpt_for_ag[agi];
@@ -260,7 +265,12 @@ void search_hpt(Experiment *exp, RngState *base_rngs) {
 
 void run_exp(Experiment *exp, RngState *rngs) {
     real *ret_sum = calloc(exp->nepisodes, sizeof(real)); // mean return at ep# over trials
-    for (uint agi = 0; agi < exp->nagents; agi++) {
+#ifdef AG_START
+    for (uint agi = AG_START; agi < AG_END; agi++)
+#else
+    for (uint agi = 0; agi < exp->nagents; agi++)
+#endif
+    {
         Agent *ag;
         Environment *env;
         exp->make_exp(&env, &ag, agi, exp->best_hpt_for_ag[agi], false);

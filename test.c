@@ -374,7 +374,12 @@ void smoothfn_qfn_tests() {
     QFn q; make_QFn(&q, (void*)&safmap, (void*)&lin);
     // fea_A = (cos(pi(1.5*)))
     assert(q.theta.dim == 2 * 2 * 3 * 3);
-    assert(Qtheta(&q, &S, &A) == 0.f); // since weight vec initd as all 0s
+
+    // so that it doesn't crash with NDEBUG since putting Qtheta inside assert
+    // will make it not be called with NDEBUG and not allocate fea_SA
+    // without NDEBUG might still be useful to see if any of the tests crash
+    real v = Qtheta(&q, &S, &A);
+    assert(v == 0.f); // since weight vec initd as all 0s
 
     // change things so its not just 0
     q.theta.data.dense[0] = 2;

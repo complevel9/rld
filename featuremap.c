@@ -231,22 +231,15 @@ typedef struct {
 
 #define FLATOUTERPROD_FL_FLIPORDER 1
 
-#define FLATOUTERPROD_PREALLOC_SENTINEL 1234
-
 void FlatOuterProduct_prealloc_out_vec(void *self_, Vec *dest) {
     // this does nothing. the combine function does allocation (and resizing)
-    // of the output vector if needed. this just puts a sentinel value to make
-    // sure prealloc was called beforehand, instead of checking for the 0 in
-    // vec's data as usual.
-
-    dest->data.dense = (void*)FLATOUTERPROD_PREALLOC_SENTINEL;
+    // of the output vector if needed.
 }
 
 void FlatOuterProduct_combine(void *self_, Vec *dest) {
     FlatOuterProduct *self = self_;
 
-    assert(dest->data.dense);
-    if (dest->data.dense == (void*)FLATOUTERPROD_PREALLOC_SENTINEL) {
+    if (dest->data.dense == NULL) {
     // if (VEC_NOT_ALLOCD(dest)) { // the allocor behavior
         uint total_dim = self->super.fea_S.dim * self->super.fea_A.dim;
         // note: this allocor for fea_SA bases effective dimensions calc on

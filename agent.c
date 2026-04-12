@@ -87,10 +87,88 @@ void make_ResidualGrad(ResidualGrad *self, Environment *env, QFn *qfn,
     self->gamma = gamma;
     make_vec(&self->g, qfn->approx_arch->indim, 0);
     assert(env->SVT_ACCESS action_space_is_fixed);
+    assert(env->SVT_ACCESS deterministic_transition);
     make_elem(&self->nA, &env->SVT_ACCESS fixed_action_space);
 }
 
 void free_ResidualGrad(ResidualGrad *self) {
+    free_vec(&self->g);
+    free_elem(&self->nA);
+}
+
+// -------------------- QTNatResidualGrad --------------------------
+
+typedef struct {
+    Agent super;
+    QFn *qfn;
+    Policy *pi;
+    Vec g;
+    Elem nA;
+    float alpha, gamma;
+} QTNatResidualGrad;
+
+void QTNatResidualGrad_start_ep(void *self_, RngState *rngs, Elem *S_0) {
+    QTNatResidualGrad *self = self_;
+    self->pi->VT_ACCESS choose_action(self->pi, rngs, S_0, &self->nA);
+}
+
+void QTNatResidualGrad_end_ep(void *self_, RngState *rngs, uint T) {}
+
+void QTNatResidualGrad_choose_action(void *self_, RngState *rngs, Elem *S, Elem *A,
+                               uint t) {
+    QTNatResidualGrad *self = self_;
+    copy_elem_to_elem(&self->nA,
+                      &self->super.env->SVT_ACCESS fixed_action_space, A);
+}
+
+void QTNatResidualGrad_update(void *self_, RngState *rngs,
+                         Elem *S, Elem *A, real R, Elem *nS,
+                         uint t, bool is_terminal) {
+    QTNatResidualGrad *self = self_;
+    float QSA = Qtheta(self->qfn, S, A);
+    float delta = R - QSA;
+    dQtheta_dtheta_writo_vec(self->qfn, S, A, &self->g);
+    if (!is_terminal) {
+        self->pi->VT_ACCESS choose_action(self->pi, rngs, nS, &self->nA);
+        delta += self->gamma * Qtheta(self->qfn, nS, &self->nA);
+        scaled_dQtheta_dtheta_addto_dvec(self->qfn, nS, &self->nA,
+                                         -self->gamma, &self->g);
+    }
+    scaled_vec_addto_dvec(&self->g, self->alpha * delta, &self->qfn->theta);
+}
+
+void QTNatResidualGrad_reset(void *self_) {
+    QTNatResidualGrad *self = self_;
+    // qfn
+    ZERO_DV(self->qfn->theta)
+    // reset policy: we'll get to it when we get to it
+}
+
+AgentVT QTNatResidualGrad_vt = {
+    .name = "Quadratic-time Natural Residual Gradient",
+    .start_ep = QTNatResidualGrad_start_ep,
+    .choose_action = QTNatResidualGrad_choose_action,
+    .update = QTNatResidualGrad_update,
+    .end_ep = QTNatResidualGrad_end_ep,
+    .reset = QTNatResidualGrad_reset
+};
+
+
+void make_QTNatResidualGrad(QTNatResidualGrad *self, Environment *env, QFn *qfn,
+                       Policy *pi, float alpha, float gamma) {
+    self->super.vt = VT_PTR_AMPER QTNatResidualGrad_vt;
+    self->super.env = env;
+    self->qfn = qfn;
+    self->pi = pi;
+    self->alpha = alpha;
+    self->gamma = gamma;
+    make_vec(&self->g, qfn->approx_arch->indim, 0);
+    assert(env->SVT_ACCESS action_space_is_fixed);
+    assert(env->SVT_ACCESS deterministic_transition);
+    make_elem(&self->nA, &env->SVT_ACCESS fixed_action_space);
+}
+
+void free_QTNatResidualGrad(QTNatResidualGrad *self) {
     free_vec(&self->g);
     free_elem(&self->nA);
 }
@@ -237,11 +315,7 @@ void QTNatSarsaLambda_update(void *self_, RngState *rngs,
     dmat_mul_vec_writo_dvec(&self->Ginv, &self->elig, &self->v);
     float vmul = self->alpha*delta;
     scaled_vec_addto_dvec(&self->v, vmul, &self->qfn->theta);
-    // yep its always symmetric
-    // if (!dmat_is_symm(&self->Ginv)) {
-    //     print_mat(&self->Ginv);
-    //     exit(1);
-    // }
+
     if (0) {
         float normv = sqrtf(inner_vec(&self->v, &self->v));
         float normelig = sqrtf(inner_vec(&self->elig, &self->elig));
