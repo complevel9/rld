@@ -19,6 +19,82 @@ typedef struct {
     Environment *env;
 } Agent;
 
+// -------------------- ResidualGrad --------------------------
+
+typedef struct {
+    Agent super;
+    QFn *qfn;
+    Policy *pi;
+    Vec g;
+    Elem nA;
+    float alpha, gamma;
+} ResidualGrad;
+
+void ResidualGrad_start_ep(void *self_, RngState *rngs, Elem *S_0) {
+    ResidualGrad *self = self_;
+    self->pi->VT_ACCESS choose_action(self->pi, rngs, S_0, &self->nA);
+}
+
+void ResidualGrad_end_ep(void *self_, RngState *rngs, uint T) {}
+
+void ResidualGrad_choose_action(void *self_, RngState *rngs, Elem *S, Elem *A,
+                               uint t) {
+    ResidualGrad *self = self_;
+    copy_elem_to_elem(&self->nA,
+                      &self->super.env->SVT_ACCESS fixed_action_space, A);
+}
+
+void ResidualGrad_update(void *self_, RngState *rngs,
+                         Elem *S, Elem *A, real R, Elem *nS,
+                         uint t, bool is_terminal) {
+    ResidualGrad *self = self_;
+    float QSA = Qtheta(self->qfn, S, A);
+    float delta = R - QSA;
+    dQtheta_dtheta_writo_vec(self->qfn, S, A, &self->g);
+    if (!is_terminal) {
+        self->pi->VT_ACCESS choose_action(self->pi, rngs, nS, &self->nA);
+        delta += self->gamma * Qtheta(self->qfn, nS, &self->nA);
+        scaled_dQtheta_dtheta_addto_dvec(self->qfn, nS, &self->nA,
+                                         -self->gamma, &self->g);
+    }
+    scaled_vec_addto_dvec(&self->g, self->alpha * delta, &self->qfn->theta);
+}
+
+void ResidualGrad_reset(void *self_) {
+    ResidualGrad *self = self_;
+    // qfn
+    ZERO_DV(self->qfn->theta)
+    // reset policy: we'll get to it when we get to it
+}
+
+AgentVT ResidualGrad_vt = {
+    .name = "Residual Gradient",
+    .start_ep = ResidualGrad_start_ep,
+    .choose_action = ResidualGrad_choose_action,
+    .update = ResidualGrad_update,
+    .end_ep = ResidualGrad_end_ep,
+    .reset = ResidualGrad_reset
+};
+
+
+void make_ResidualGrad(ResidualGrad *self, Environment *env, QFn *qfn,
+                       Policy *pi, float alpha, float gamma) {
+    self->super.vt = VT_PTR_AMPER ResidualGrad_vt;
+    self->super.env = env;
+    self->qfn = qfn;
+    self->pi = pi;
+    self->alpha = alpha;
+    self->gamma = gamma;
+    make_vec(&self->g, qfn->approx_arch->indim, 0);
+    assert(env->SVT_ACCESS action_space_is_fixed);
+    make_elem(&self->nA, &env->SVT_ACCESS fixed_action_space);
+}
+
+void free_ResidualGrad(ResidualGrad *self) {
+    free_vec(&self->g);
+    free_elem(&self->nA);
+}
+
 // -------------------- SarsaLambda ---------------------------
 
 typedef struct {
@@ -58,19 +134,6 @@ void SarsaLambda_update(void *self_, RngState *rngs,
     scale_vec(&self->elig, self->gamma * self->lambda);
     dQtheta_dtheta_addto_dvec(self->qfn, S, A, &self->elig);
     scaled_vec_addto_dvec(&self->elig, self->alpha * delta, &self->qfn->theta);
-    // float vmul = self->alpha*delta;
-    // qg++;
-    // if (qg % 100 == 0) {
-    //     float normv = inner_vec(&self->elig, &self->elig);
-    //     float normelig = inner_vec(&self->elig, &self->elig);
-    //     float bilin = inner_vec(&self->elig, &self->elig);
-    //     printf("delta=%.6f\t"
-    //         "change=%.6f\t"
-    //         "L2(update)=%.6f\t"
-    //         "cos(ang(v,elig))=%.6f\n",
-    //         delta, QSA - Qtheta(self->qfn, S, A),
-    //         normv*vmul, 180/M_PI*acosf(bilin/sqrtf(normv*normelig)));
-    // }
 }
 
 void SarsaLambda_reset(void *self_) {
@@ -83,7 +146,7 @@ void SarsaLambda_reset(void *self_) {
 }
 
 AgentVT SarsaLambda_vt = {
-    .name = "SarsaLambda",
+    .name = "Sarsa(lambda)",
     .start_ep = SarsaLambda_start_ep,
     .choose_action = SarsaLambda_choose_action,
     .update = SarsaLambda_update,
@@ -211,7 +274,7 @@ void reset_QTNatSarsaLambda(void *self_) {
 }
 
 AgentVT QTNatSarsaLambda_vt = {
-    .name = "QTNatSarsaLambda",
+    .name = "Quadratic-time Natural Sarsa(lambda)",
     .start_ep = QTNatSarsaLambda_start_ep,
     .choose_action = QTNatSarsaLambda_choose_action,
     .update = QTNatSarsaLambda_update,

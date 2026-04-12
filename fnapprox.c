@@ -11,6 +11,8 @@ typedef struct {
     real (*f)                 (void *self_, Vec *theta, Vec *x);
     void (*deriv_writo_vec)   (void *self_, Vec *theta, Vec *x, Vec *dest);
     void (*deriv_addto_dvec)  (void *self_, Vec *theta, Vec *x, Vec *dest);
+    void (*scaled_deriv_addto_dvec)(void *self_, Vec *theta, Vec *x, real a,
+                                    Vec *dest);
     void (*prealloc_deriv_vec)(void *self_,                     Vec *dest);
     void (*alloc_init_theta)  (void *self_, Vec *theta);
 } SmoothParametricFnVT;
@@ -45,6 +47,11 @@ void Linear_deriv_add(void *self, Vec *theta, Vec *x, Vec *dest) {
     vec_addto_dvec(x, dest);
 }
 
+void Linear_scaled_deriv_add(void *self, Vec *theta, Vec *x, real a,
+                             Vec *dest) {
+    scaled_vec_addto_dvec(x, a, dest);
+}
+
 void Linear_prealloc_deriv(void *self_, Vec *dest) {
     // does nothing.
     assert(VEC_NOT_ALLOCD(dest));
@@ -54,8 +61,9 @@ SmoothParametricFnVT Linear_vt = {
     .f = Linear_f,
     .deriv_writo_vec = Linear_deriv_wri,
     .deriv_addto_dvec = Linear_deriv_add,
+    .scaled_deriv_addto_dvec = Linear_scaled_deriv_add,
     .alloc_init_theta = Linear_alloc_init_theta,
-    .prealloc_deriv_vec = Linear_prealloc_deriv
+    .prealloc_deriv_vec = Linear_prealloc_deriv,
 };
 
 void make_Linear(Linear *self, uint indim) {

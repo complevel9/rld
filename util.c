@@ -121,7 +121,7 @@ extern inline bool req_arr(real *a, real *b, uint n, real ep) {
     return true;
 }
 
-// don't use this it's slower than libm's cosf()
+// don't use this it's slower than gnu libm's cosf()
 #if 0
     static inline
     float cosf_x87(float x) {

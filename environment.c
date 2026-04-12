@@ -49,6 +49,7 @@ typedef struct {
 
 #define MC_FL_STOPSHORT 1
 #define MC_STOPSHORT_MAX_T 2000
+#define MC_MAX_T 10000
 
 extern inline void MountainCar_start_state(void *self_, RngState *s, Elem *S);
 extern inline bool MountainCar_is_terminal(void *self_, Elem *S, uint t);
@@ -109,9 +110,11 @@ void MountainCar_start_state(void *self_, RngState *s, Elem *S) {
 extern inline
 bool MountainCar_is_terminal(void *self_, Elem *S, uint t) {
     MountainCar *self = self_;
-    return S->MC_POS >= MC_RIGHT
-        || ((self->super.flags & MC_FL_STOPSHORT)
-            && t > MC_STOPSHORT_MAX_T);
+    if (t > MC_MAX_T)
+        return true;
+    if (t > MC_STOPSHORT_MAX_T && (self->super.flags & MC_FL_STOPSHORT))
+        return true;
+    return S->MC_POS >= MC_RIGHT;
 }
 
 bool MountainCar_transition(void *self_, RngState *s,

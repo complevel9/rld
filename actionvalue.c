@@ -42,3 +42,11 @@ void dQtheta_dtheta_addto_dvec(QFn *qfn, Elem *S, Elem *A, Vec *dest) {
     qfn->approx_arch->VT_ACCESS
         deriv_addto_dvec(qfn, &qfn->theta, &qfn->fea_SA, dest);
 }
+
+void scaled_dQtheta_dtheta_addto_dvec(QFn *qfn, Elem *S, Elem *A, real a,
+                                      Vec *dest) {
+    qfn->sa_feamap->VT_ACCESS
+        map_writo_vec(qfn->sa_feamap, S, A, &qfn->fea_SA);
+    qfn->approx_arch->VT_ACCESS
+        scaled_deriv_addto_dvec(qfn, &qfn->theta, &qfn->fea_SA, a, dest);
+}
