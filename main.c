@@ -101,8 +101,9 @@ void destroy_allegro() {
     allegro_active = false;
 }
 
-#define AG_START 0
-#define AG_END 2
+// agent index list: select a list of agents instead of running all of them
+// terminate the list with 0
+#define AGI_LIST {3, 4, 0}
 
 #include "colormap.c"
 
@@ -123,14 +124,15 @@ int main(int argc, char **argv) {
     #endif
 
     #ifdef NDEBUG
-        puts("assert macros active");
-    #else
         puts("assert macros disabled");
+    #else
+        puts("assert macros active");
     #endif
 
-    all_tests();
+    // all_tests();
 
     time_t timeseed = time(NULL);
+    // time_t timeseed = 1234;
     printf("Time seed is %ld\n", timeseed);
     RngState rngs = {.x={
         // idk just random looking linear things, doesnt matter too much

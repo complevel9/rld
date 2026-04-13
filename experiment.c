@@ -62,10 +62,9 @@ typedef struct {
     HParamsTupleSearch *hptss;
     HParam **best_hpt_for_ag;
     uint nagents;
-    uint nepisodes, ntrials;
+    uint nepisodes, ntrials, stuck_timesteps;
     uint nsamples_hpts;
-    uint nepisodes_hpts, ntrials_hpts;
-    uint stuck_hptskip_times;
+    uint nepisodes_hpts, ntrials_hpts, stuck_timesteps_hpt;
     uint steps_per_vis;
 } Experiment;
 
@@ -101,9 +100,6 @@ uint run_episode(RngState *rngs, Environment *env, Agent *ag, real *outG,
     uint frame = 0;
     uint steps_till_vis = 0;
     ALLEGRO_EVENT event;
-    // skip == 0: always waits for event queue
-    // skip == 1: don't wait just draw, still listen in case there are events
-    // skip == 2: don't listen, don't draw
     for (bool is_terminal = false; !is_terminal; frame++) {
         if (steps_per_vis && !steps_till_vis) {
             al_wait_for_event(event_queue, &event);
@@ -114,7 +110,7 @@ uint run_episode(RngState *rngs, Environment *env, Agent *ag, real *outG,
             break;
             case ALLEGRO_EVENT_KEY_DOWN:
                 if (event.keyboard.keycode == ALLEGRO_KEY_ESCAPE)
-                    steps_per_vis *= 2;
+                    steps_per_vis *= 4;
             break;
             case ALLEGRO_EVENT_DISPLAY_CLOSE:
                 putchar('\n');
@@ -168,8 +164,10 @@ uint run_episode(RngState *rngs, Environment *env, Agent *ag, real *outG,
 
 
 void search_hpt(Experiment *exp, RngState *base_rngs) {
-#ifdef AG_START
-    for (uint agi = AG_START; agi < AG_END; agi++)
+#ifdef AGI_LIST
+    uint agi_list[] = AGI_LIST;
+    uint agii = 0;
+    for (uint agi = agi_list[0]; agii < sizeof agi_list / sizeof agi - 1; agi = agi_list[++agii])
 #else
     for (uint agi = 0; agi < exp->nagents; agi++)
 #endif
@@ -223,12 +221,13 @@ void search_hpt(Experiment *exp, RngState *base_rngs) {
                         float G;
                         uint T = run_episode(&rngs, env, ag, &G,
                             0, NULL, &e, 0);
-                        total_eps++;
-                        // update mean return
-                        float mrlr = 1.f / total_eps;
-                        ret_mean = ret_mean*(1-mrlr) + G*mrlr;
-                        if (T >= exp->stuck_hptskip_times)
+                        if (T >= exp->stuck_timesteps_hpt)
                             goto stuck;
+
+                        // update mean return
+                        total_eps++;
+                        float mrlr = 1.f / total_eps;
+                        ret_mean = ret_mean*(1.f-mrlr) + G*mrlr;
                     }
                 }
                 // update thread's best
@@ -265,13 +264,17 @@ void search_hpt(Experiment *exp, RngState *base_rngs) {
 
 void run_exp(Experiment *exp, RngState *rngs) {
     real *ret_sum = calloc(exp->nepisodes, sizeof(real)); // mean return at ep# over trials
-#ifdef AG_START
-    for (uint agi = AG_START; agi < AG_END; agi++)
+#ifdef AGI_LIST
+    uint agi_list[] = AGI_LIST;
+    uint agii = 0;
+    for (uint agi = agi_list[0]; agii < sizeof agi_list / sizeof agi - 1; agi = agi_list[++agii])
 #else
     for (uint agi = 0; agi < exp->nagents; agi++)
 #endif
     {
-        Agent *ag;
+        memset(ret_sum, 0, exp->nepisodes * sizeof(real));
+
+            Agent *ag;
         Environment *env;
         exp->make_exp(&env, &ag, agi, exp->best_hpt_for_ag[agi], false);
         printf("Agent name: %s\n", ag->VT_ACCESS name);
@@ -283,13 +286,15 @@ void run_exp(Experiment *exp, RngState *rngs) {
                                      exp->steps_per_vis, exp->visfn, &ep,
                                      0);
                 ret_sum[ep] += G;
-                printf("%u\t", T);
+                // printf("%u\t", T);
+                printf("%.0f\t", G);
                 fflush(stdout);
                 (void)T;
             }
             putchar('\n');
         }
         exp->free_exp(env, ag, agi);
+        printf("nep = %u\n", exp->ntrials);
         puts("Mean:");
         for (uint ep = 0; ep < exp->nepisodes; ep++)
             printf("%.0f\t", ret_sum[ep] / exp->ntrials);

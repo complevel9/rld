@@ -186,7 +186,7 @@ void mcar_exp_fb_vis(Environment *env_, Agent *ag_, Elem *S, Elem *A, float R,
     al_draw_textf(font, WHITE, 15, 25, 0, "Time: %u", t);
 
     // static float val_max = 8.f, val_min = -40.f;
-    static float val_max = 0.f, val_min = -1.f;
+    static float val_max = 0.f, val_min = -0.1f;
     al_set_target_backbuffer(display);
     for (uint i = 0; i < 3; i++) {
         ALLEGRO_LOCKED_REGION *bmr = al_lock_bitmap(qbmp[i], QBMP_FORMAT,
@@ -235,78 +235,78 @@ void mcar_exp_fb_vis(Environment *env_, Agent *ag_, Elem *S, Elem *A, float R,
     al_flip_display();
 }
 
-
+// macros for convenience, since the ranges are similar anyway
+#define SEARCH_EPSILON {"eps", rand_exprange_writo,    {{.range={1e-5, 1.0}}, 'r'}}
+#define SEARCH_ALPHA   {"alp", rand_exprange_writo,    {{.range={1e-5, 1.0}}, 'r'}}
+#define SEARCH_GAMMA   {"gam", rand_1m_exprange_writo, {{.range={1e-5, 1.0}}, 'r'}}
+#define SEARCH_LAMBDA  {"lam", rand_1m_exprange_writo, {{.range={1e-5, 1.0}}, 'r'}}
+#define SEARCH_BETA    {"bet", rand_1m_exprange_writo, {{.range={1e-5, 1.0}}, 'r'}}
 
 Experiment mcar_exp = {
     .make_exp = make_mcar_experiment,
     .free_exp = free_mcar_experiment,
     .visfn = mcar_exp_fb_vis,
-    .steps_per_vis = 2,
+    .steps_per_vis = 0,
     .nagents = 6, // <-------------------------------------- testing
     .nepisodes = 15,
-    .ntrials = 10,
+    .ntrials = 50,
+    .stuck_timesteps = MC_MAX_T,
 
-    .nepisodes_hpts = 10,
+    .nsamples_hpts  = 500,
+    .nepisodes_hpts = 20,
     .ntrials_hpts   = 50,
-    .nsamples_hpts  = 1000,
-    .stuck_hptskip_times = MC_STOPSHORT_MAX_T,
+    .stuck_timesteps_hpt = MC_STOPSHORT_MAX_T,
     .hptss = (HParamsTupleSearch[]) {
         { // rg
             .nhparams = 3,
             .hparam_search = (HParamSearch[]) {
-                {"eps", rand_exprange_writo, {{.range={1e-5, 0.3}}, 'r'}},
-                {"alp", rand_exprange_writo, {{.range={1e-4, 0.1}}, 'r'}},
-                {"gam", rand_1m_exprange_writo, {{.range={5e-4, 0.9}}, 'r'}},
+                SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_GAMMA,
             }
         },
         { // qtnat rg
             .nhparams = 3,
             .hparam_search = (HParamSearch[]) {
-                {"eps", rand_exprange_writo, {{.range={1e-5, 0.3}}, 'r'}},
-                {"alp", rand_exprange_writo, {{.range={1e-4, 0.1}}, 'r'}},
-                {"gam", rand_1m_exprange_writo, {{.range={5e-4, 0.9}}, 'r'}},
+                SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_GAMMA,
             }
         },
         { // ltnat rg
             .nhparams = 4,
             .hparam_search = (HParamSearch[]) {
-                {"eps", rand_exprange_writo, {{.range={1e-5, 0.3}}, 'r'}},
-                {"alp", rand_exprange_writo, {{.range={1e-4, 0.1}}, 'r'}},
-                {"bet", rand_1m_exprange_writo, {{.range={5e-4, 0.9}}, 'r'}},
-                {"gam", rand_1m_exprange_writo, {{.range={5e-4, 0.9}}, 'r'}},
+                SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_BETA, SEARCH_GAMMA,
             }
         },
         { // sl
             .nhparams = 4,
             .hparam_search = (HParamSearch[]) {
-                {"eps", rand_exprange_writo, {{.range={1e-5, 0.3}}, 'r'}},
-                {"alp", rand_exprange_writo, {{.range={1e-4, 0.1}}, 'r'}},
-                {"gam", rand_1m_exprange_writo, {{.range={5e-4, 0.9}}, 'r'}},
-                {"lam", rand_1m_exprange_writo, {{.range={1e-4, 0.9}}, 'r'}},
+                SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_GAMMA, SEARCH_LAMBDA,
             }
         },
-        { // qt nat sl
+        { // qtnat sl
+            .nhparams = 4,
+            .hparam_search = (HParamSearch[]) {
+                SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_GAMMA, SEARCH_LAMBDA,
+            }
+        },
+        { // ltnat sl
             .nhparams = 5,
             .hparam_search = (HParamSearch[]) {
-                {"eps", rand_exprange_writo, {{.range={1e-5, 0.3}}, 'r'}},
-                {"alp", rand_exprange_writo, {{.range={5e-4, 0.1}}, 'r'}},
-                {"bet", rand_exprange_writo, {{.range={5e-4, 0.1}}, 'r'}},
-                {"gam", rand_1m_exprange_writo, {{.range={1e-4, 0.9}}, 'r'}},
-                {"lam", rand_1m_exprange_writo, {{.range={1e-4, 0.9}}, 'r'}},
+                SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_BETA, SEARCH_GAMMA,
+                SEARCH_LAMBDA,
             }
         },
     },
     .best_hpt_for_ag = (HParam*[]) {
-        (HParam[]) // rg;
-        {{.r=0.0001}, {.r=0.002}, {.r=0.995}},
-        (HParam[]) // qtnat rg;
-        {{.r=0.0001}, {.r=0.002}, {.r=0.995}},
+        // epsilon        // alpha         // gamma         // lambda         // beta
+        (HParam[]) // rg; mean ret=-249.42
+        {{.r=0.00022221}, {.r=0.16062324}, {.r=0.96570992}},
+        (HParam[]) // qtnat rg; mean ret=-263.27
+        {{.r=0.00001640}, {.r=0.11993723}, {.r=0.98075956}},
         (HParam[]) // ltnat rg;
         {},
-        (HParam[]) // sl; mean ret=-195.18
-        {{.r=0.00005241}, {.r=0.06805436}, {.r=0.99874651}, {.r=0.38837796}},
-        (HParam[]) // qtnat sl; mean ret=-167.16
-        {{.r=0.00008165}, {.r=0.07211637}, {.r=0.99987674}, {.r=0.61488545}},
+        (HParam[]) // sl; mean ret=-193.29
+        {{.r=0.00047899}, {.r=0.09324095}, {.r=0.99973625}, {.r=0.22648823}},
+        (HParam[]) // qtnat sl; mean ret=-142.66
+        {{.r=0.00049613}, {.r=0.17115353}, {.r=0.99950778}, {.r=0.00953287}},
         (HParam[]) // ltnat sl;
         {},
     }

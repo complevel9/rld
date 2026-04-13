@@ -41,14 +41,14 @@ typedef struct {
 
 // -------------------- MountainCar : Environment -------------
 
-// According to Replacing trace Sutton Singh 1996
+// According to Replacing trace Sutton Singh 1996, but with max timesteps
 
 typedef struct {
     Environment super;
 } MountainCar; // literally just a vtable pointer lol
 
 #define MC_FL_STOPSHORT 1
-#define MC_STOPSHORT_MAX_T 2000
+#define MC_STOPSHORT_MAX_T 5000
 #define MC_MAX_T 10000
 
 extern inline void MountainCar_start_state(void *self_, RngState *s, Elem *S);
