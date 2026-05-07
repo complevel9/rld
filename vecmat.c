@@ -280,6 +280,18 @@ void diag_mat_dmat(Mat *A, real a) {
             A->data.dense[i*n+j] = (i == j)*a;
 }
 
+void scale_mat(Mat *A, real a) {
+    Vec v = {
+        .data.dense = A->data.dense,
+        .dim = A->nrows * A->ncols,
+        .sparse_nentries = A->sparse_nentries,
+        .sparse_cap = A->sparse_cap
+    };
+    scale_vec(&v, a);
+    // sparse_cap and sparse_nentries should stay the exact same, so no need
+    // to copy back to A. buffer pointed to by data is modified anyways.
+}
+
 // uTv
 real inner_vec(Vec *u, Vec *v) {
     assert(u->dim == v->dim);
@@ -511,7 +523,7 @@ void print_vec(Vec *v) {
     if (VEC_PTR_IS_DENSE(v)) {
         printf("(");
         for (uint i = 0; i < v->dim; i++)
-            printf("%.3g%c ", v->data.dense[i], i == v->dim-1 ? ')' : ',');
+            printf("%.5g%c ", v->data.dense[i], i == v->dim-1 ? ')' : ',');
         printf("\n");
     } else {
         for (ushort ie = 0; ie < v->sparse_nentries; ie++) {

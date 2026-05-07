@@ -66,7 +66,10 @@ typedef struct {
     uint nsamples_hpts;
     uint nepisodes_hpts, ntrials_hpts, stuck_timesteps_hpt;
     uint steps_per_vis;
+    uint flags;
 } Experiment;
+
+#define EXPERIMENT_VIS_REQUIRE_ALLEGRO 0x1
 
 
 #define RUN_GETCH 1
@@ -86,35 +89,41 @@ uint run_episode(RngState *rngs, Environment *env, Agent *ag, real *outG,
     ag->VT_ACCESS start_ep(ag, rngs, Sp);
     uint t = 0;
     real G = 0;
+    bool use_allegro = steps_per_vis > 0
+      && (flags & EXPERIMENT_VIS_REQUIRE_ALLEGRO);
 
     ALLEGRO_TIMER *redraw_timer = NULL;
-    if (steps_per_vis) {
+    if (use_allegro) {
         init_allegro();
         redraw_timer = al_create_timer(1.0 / FPS);
         init_die(redraw_timer, "redraw_timer")
         al_start_timer(redraw_timer);
         al_register_event_source(event_queue,
-          al_get_timer_event_source(redraw_timer));
+        al_get_timer_event_source(redraw_timer));
     }
 
     uint frame = 0;
     uint steps_till_vis = 0;
     ALLEGRO_EVENT event;
     for (bool is_terminal = false; !is_terminal; frame++) {
-        if (steps_per_vis && !steps_till_vis) {
-            al_wait_for_event(event_queue, &event);
-            switch(event.type)
-            {
-            case ALLEGRO_EVENT_TIMER:
+        if (steps_till_vis == 0 && steps_per_vis > 0) {
+            if (use_allegro) {
+                al_wait_for_event(event_queue, &event);
+                switch(event.type)
+                {
+                case ALLEGRO_EVENT_TIMER:
+                    steps_till_vis = steps_per_vis;
+                break;
+                case ALLEGRO_EVENT_KEY_DOWN:
+                    if (event.keyboard.keycode == ALLEGRO_KEY_ESCAPE)
+                        steps_per_vis *= 4;
+                break;
+                case ALLEGRO_EVENT_DISPLAY_CLOSE:
+                    putchar('\n');
+                    exit(0);
+                }
+            } else {
                 steps_till_vis = steps_per_vis;
-            break;
-            case ALLEGRO_EVENT_KEY_DOWN:
-                if (event.keyboard.keycode == ALLEGRO_KEY_ESCAPE)
-                    steps_per_vis *= 4;
-            break;
-            case ALLEGRO_EVENT_DISPLAY_CLOSE:
-                putchar('\n');
-                exit(0);
             }
         } else {
             steps_till_vis--;
@@ -164,13 +173,17 @@ uint run_episode(RngState *rngs, Environment *env, Agent *ag, real *outG,
 
 
 void search_hpt(Experiment *exp, RngState *base_rngs) {
+
 #ifdef AGI_LIST
     uint agi_list[] = AGI_LIST;
     uint agii = 0;
-    for (uint agi = agi_list[0]; agii < sizeof agi_list / sizeof agi - 1; agi = agi_list[++agii])
+    for (uint agi = agi_list[0];
+         agii < sizeof agi_list / sizeof agi - 1;
+         agi = agi_list[++agii])
 #else
     for (uint agi = 0; agi < exp->nagents; agi++)
 #endif
+
     {
         HParamsTupleSearch hpts = exp->hptss[agi];
 
@@ -262,15 +275,18 @@ void search_hpt(Experiment *exp, RngState *base_rngs) {
     }
 }
 
-void run_exp(Experiment *exp, RngState *rngs) {
-    real *ret_sum = calloc(exp->nepisodes, sizeof(real)); // mean return at ep# over trials
+void run_exp(Experiment *exp, RngState *rngs, FILE *outfp) {
+    real *ret_sum = custom_malloc(exp->nepisodes * sizeof ret_sum[0]);
 #ifdef AGI_LIST
     uint agi_list[] = AGI_LIST;
     uint agii = 0;
-    for (uint agi = agi_list[0]; agii < sizeof agi_list / sizeof agi - 1; agi = agi_list[++agii])
+    for (uint agi = agi_list[0];
+         agii < sizeof agi_list / sizeof agi - 1;
+         agi = agi_list[++agii])
 #else
     for (uint agi = 0; agi < exp->nagents; agi++)
 #endif
+
     {
         memset(ret_sum, 0, exp->nepisodes * sizeof(real));
 
@@ -286,19 +302,37 @@ void run_exp(Experiment *exp, RngState *rngs) {
                                      exp->steps_per_vis, exp->visfn, &ep,
                                      0);
                 ret_sum[ep] += G;
-                // printf("%u\t", T);
-                printf("%.0f\t", G);
-                fflush(stdout);
-                (void)T;
+                // print per-trial undiscounted returns
+                #if 1
+                    // printf("%u\t", T);
+                    if (!outfp) { // out to stdout
+                        printf("%.0f\t", G);
+                        fflush(stdout);
+                        (void)T;
+                        if (ep == exp->nepisodes - 1)
+                            putchar('\n');
+                    } else {
+                        fprintf(outfp, "%.6g%c", G, (ep == exp->nepisodes - 1) ? '\n' : ',');
+                    }
+                #endif
             }
-            putchar('\n');
         }
         exp->free_exp(env, ag, agi);
         printf("nep = %u\n", exp->ntrials);
-        puts("Mean:");
-        for (uint ep = 0; ep < exp->nepisodes; ep++)
-            printf("%.0f\t", ret_sum[ep] / exp->ntrials);
-        putchar('\n');
+        #if 0
+            puts("Mean:");
+            for (uint ep = 0; ep < exp->nepisodes; ep++) {
+                #define ret_mean_at_ep_across_trials (ret_sum[ep] / exp->ntrials)
+                if (outfp == stdout) {
+                    printf("%.3g\t", ret_mean_at_ep_across_trials);
+                } else {
+                    fprintf(outfp, "%.6g%c",
+                      ret_mean_at_ep_across_trials,
+                      (ep == exp->nepisodes - 1) ? '\n' : ',');
+                }
+            }
+            putchar('\n');
+        #endif
     }
     free(ret_sum);
 }

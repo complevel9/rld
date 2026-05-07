@@ -6,3 +6,6 @@ bin/
 *.o
 gmon*
 *.txt
+*.csv
+*.pdf
+

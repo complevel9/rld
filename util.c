@@ -175,6 +175,7 @@ extern inline real rand_exprange(RngState *s, real a, real b) {
 
 // somethings wrong if more than this much mem is being allocated
 #define MALLOC_MAX (1024*40)
+// #define MALLOC_MAX (1024*400)
 
 
 // since malloc with size 0 doesnt have portable behavior
@@ -185,7 +186,6 @@ void *custom_malloc(size_t s) {
         assert(r);
         return r;
     }
-    return (void*)0xbaadf00d;
+    return NULL;
+    // return (void*)0x13371337;
 }
-
-#define custom_malloc malloc

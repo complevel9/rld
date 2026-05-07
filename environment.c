@@ -10,21 +10,7 @@ typedef struct {
 } EnvironmentSVT; // "static virtual table"
 
 typedef struct {
-    // lol you cant do this in C++?? why no virtual static member var
-    // accessible from obj. iso wg pls fix
-    // you can literally get class name at run time too. without having to use
-    // a getter func. its so convenient for a specific niche. zero overhead.
-    // just a bit weird here since i can switch to copying the whole vtable,
-    // which is not C++ behaviour, then these cant be copied as normal var
-    // but need to be ptr to still be shared: there must be at least 1
-    // dereferencing for the sharing. making it always a pointer solves the
-    // issue, but now if objects only have vtable ptr then there's 2 derefs
-    // instead of one. at the end of the day, vtables are just constant tables
-    // shared within a class. usually they only have constant fn ptrs in them,
-    // but why not just put other things in it as well. they can be non const
-    // too.
     EnvironmentSVT VT_COPY_ASTER svt;
-
     void (*start_state)(void *self_, RngState *s, Elem *S);
     bool (*transition) (void *self_, RngState *s,
                         Elem *S, Elem *A, real *R, Elem *nS,
@@ -38,14 +24,77 @@ typedef struct {
 } Environment;
 
 
+// -------------------- Flip ----------------------------------
 
-// -------------------- MountainCar : Environment -------------
+typedef struct {
+    Environment super;
+    uint steps_till_flip;
+    uint win_action;
+} Flip;
+
+#define STEPS_PER_FLIP 2000
+
+void Flip_start_state(void *self_, RngState *s, Elem *S) {
+    S->x[0].i = 0;
+}
+
+bool Flip_is_terminal(void *self_, Elem *S, uint t) {
+    return t > 0 || S->x[0].i == 1;
+}
+
+bool Flip_transition(void *self_, RngState *s,
+                     Elem *S, Elem *A, real *R, Elem *nS,
+                     uint t) {
+    Flip *self = self_;
+    nS->x[0].i = 1;
+    *R = self->win_action == A->x[0].i ? 1.f : 0.f;
+    // printf("chose action %u with reward %.f\n", t, A->x[0].i, *R);
+    // getchar();
+    if (self->steps_till_flip) {
+        self->steps_till_flip--;
+    } else {
+        // printf("flip!!!!!!!!\n");
+        self->steps_till_flip = STEPS_PER_FLIP;
+        self->win_action = 1 - self->win_action;
+    }
+    return true;
+}
+
+EnvironmentVT Flip_vt = {
+    .svt = VT_COPY_SW(&(EnvironmentSVT),) {
+        .name = "Flip",
+        .state_space = {
+            .nfactors = 1,
+            .factors = (SimpleSet[]){{.type='d', .as.discrete.n=1}}
+        },
+        .fixed_action_space = {
+            .nfactors = 1,
+            .factors = (SimpleSet[]){{.type='d', .as.discrete.n=2}}
+        },
+        .action_space_is_fixed = true,
+        .action_space_is_discrete = true,
+        .deterministic_transition = true,
+    },
+    .start_state = Flip_start_state,
+    .transition = Flip_transition,
+    .is_terminal = Flip_is_terminal,
+};
+
+void make_Flip(Flip *self) {
+    self->super.vt = VT_PTR_AMPER Flip_vt;
+    self->steps_till_flip = STEPS_PER_FLIP;
+    self->win_action = 0;
+}
+
+void free_Flip(Flip *self) {}
+
+// -------------------- MountainCar ---------------------------
 
 // According to Replacing trace Sutton Singh 1996, but with max timesteps
 
 typedef struct {
     Environment super;
-} MountainCar; // literally just a vtable pointer lol
+} MountainCar;
 
 #define MC_FL_STOPSHORT 1
 #define MC_STOPSHORT_MAX_T 5000
@@ -83,7 +132,7 @@ EnvironmentVT MountainCar_vt = {
         .fixed_action_space = {
             .nfactors = 1,
             .factors = (SimpleSet[]){
-                {.type='d', .as.discrete={.n=3}}
+                {.type='d', .as.discrete.n=3}
             }
         },
         .action_space_is_fixed = true,

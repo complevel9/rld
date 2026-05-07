@@ -35,7 +35,7 @@ typedef struct {
 extern inline
 void make_space(Space *space, uint nfactors) {
     space->nfactors = nfactors;
-    space->factors = malloc(nfactors * sizeof(SimpleSet));
+    space->factors = custom_malloc(nfactors * sizeof(SimpleSet));
 }
 
 extern inline
@@ -60,7 +60,7 @@ void set_space_range_factor(Space *space, uint idx, Range r) {
 extern inline
 void make_elem(Elem *x, Space *space) {
     // x->space = space;
-    x->x = malloc(space->nfactors * sizeof(SimpleElem));
+    x->x = custom_malloc(space->nfactors * sizeof(SimpleElem));
 }
 
 extern inline

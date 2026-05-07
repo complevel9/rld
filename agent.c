@@ -27,7 +27,7 @@ typedef struct {
     Policy *pi;
     Vec g;
     Elem nA;
-    float alpha, gamma;
+    real alpha, gamma;
 } ResidualGrad;
 
 void ResidualGrad_start_ep(void *self_, RngState *rngs, Elem *S_0) {
@@ -48,7 +48,7 @@ void ResidualGrad_update(void *self_, RngState *rngs,
                          Elem *S, Elem *A, real R, Elem *nS,
                          uint t, bool is_terminal) {
     ResidualGrad *self = self_;
-    float delta = R - Qtheta(self->qfn, S, A);
+    real delta = R - Qtheta(self->qfn, S, A);
     dQtheta_dtheta_writo_vec(self->qfn, S, A, &self->g);
     if (!is_terminal) {
         self->pi->VT_ACCESS choose_action(self->pi, rngs, nS, &self->nA);
@@ -77,7 +77,7 @@ AgentVT ResidualGrad_vt = {
 
 
 void make_ResidualGrad(ResidualGrad *self, Environment *env, QFn *qfn,
-                       Policy *pi, float alpha, float gamma) {
+                       Policy *pi, real alpha, real gamma) {
     self->super.vt = VT_PTR_AMPER ResidualGrad_vt;
     self->super.env = env;
     self->qfn = qfn;
@@ -95,41 +95,41 @@ void free_ResidualGrad(ResidualGrad *self) {
     free_elem(&self->nA);
 }
 
-// -------------------- QTNatResidualGrad --------------------------
+// -------------------- NatResidualGrad --------------------------
 
 typedef struct {
     Agent super;
     QFn *qfn;
     Policy *pi;
-    Mat Finv;
+    Mat Ginv;
     Vec g, v;
     Elem nA;
-    float alpha, gamma;
-} QTNatResidualGrad;
+    real alpha, gamma;
+} NatResidualGrad;
 
-void QTNatResidualGrad_start_ep(void *self_, RngState *rngs, Elem *S_0) {
-    QTNatResidualGrad *self = self_;
+void NatResidualGrad_start_ep(void *self_, RngState *rngs, Elem *S_0) {
+    NatResidualGrad *self = self_;
     self->pi->VT_ACCESS choose_action(self->pi, rngs, S_0, &self->nA);
 }
 
-void QTNatResidualGrad_end_ep(void *self_, RngState *rngs, uint T) {}
+void NatResidualGrad_end_ep(void *self_, RngState *rngs, uint T) {}
 
-void QTNatResidualGrad_choose_action(void *self_, RngState *rngs, Elem *S,
+void NatResidualGrad_choose_action(void *self_, RngState *rngs, Elem *S,
                                      Elem *A, uint t) {
-    QTNatResidualGrad *self = self_;
+    NatResidualGrad *self = self_;
     copy_elem_to_elem(&self->nA,
                       &self->super.env->SVT_ACCESS fixed_action_space, A);
 }
 
-void QTNatResidualGrad_update(void *self_, RngState *rngs,
+void NatResidualGrad_update(void *self_, RngState *rngs,
                          Elem *S, Elem *A, real R, Elem *nS,
                          uint t, bool is_terminal) {
-    QTNatResidualGrad *self = self_;
-    float QSA = Qtheta(self->qfn, S, A);
+    NatResidualGrad *self = self_;
+    real QSA = Qtheta(self->qfn, S, A);
     // delta_t = R_{t+1} + gamma * Q(S_{t+1}, A_{t+1}) - Q(S_t, A_t)
     // g_t = partial Q_theta(S_t, A_t)/partial theta
     //     - gamma*partial Q_theta(S_{t+1}, A_{t+1})/partial theta
-    float delta = R - QSA;
+    real delta = R - QSA;
     dQtheta_dtheta_writo_vec(self->qfn, S, A, &self->g);
     if (!is_terminal) {
         self->pi->VT_ACCESS choose_action(self->pi, rngs, nS, &self->nA);
@@ -138,38 +138,41 @@ void QTNatResidualGrad_update(void *self_, RngState *rngs,
                                          -self->gamma, &self->g);
     }
     // v = G^{-1}_{t-1} g_t
-    dmat_mul_vec_writo_dvec(&self->Finv, &self->g, &self->v);
+    dmat_mul_vec_writo_dvec(&self->Ginv, &self->g, &self->v);
 
     // update G^{-1} with Sherman-Morrison inverse
-    float scale = -delta*delta
+    real scale = -delta*delta
                 / (1 + delta*delta*inner_vec(&self->g, &self->v));
-    scaled_self_outer_vec_addto_dmat(&self->v, scale, &self->Finv);
+    scaled_self_outer_vec_addto_dmat(&self->v, scale, &self->Ginv);
+
+    // v = G^{-1}_t g_t
+    dmat_mul_vec_writo_dvec(&self->Ginv, &self->g, &self->v);
 
     // update theta
-    scaled_vec_addto_dvec(&self->g, self->alpha * delta, &self->qfn->theta);
+    scaled_vec_addto_dvec(&self->v, self->alpha * delta, &self->qfn->theta);
 }
 
-void QTNatResidualGrad_reset(void *self_) {
-    QTNatResidualGrad *self = self_;
-    diag_mat_dmat(&self->Finv, 1);
+void NatResidualGrad_reset(void *self_) {
+    NatResidualGrad *self = self_;
+    diag_mat_dmat(&self->Ginv, 1);
     // qfn
     ZERO_DV(self->qfn->theta)
     // reset policy: we'll get to it when we get to it
 }
 
-AgentVT QTNatResidualGrad_vt = {
-    .name = "Quadratic-time Natural Residual Gradient",
-    .start_ep = QTNatResidualGrad_start_ep,
-    .choose_action = QTNatResidualGrad_choose_action,
-    .update = QTNatResidualGrad_update,
-    .end_ep = QTNatResidualGrad_end_ep,
-    .reset = QTNatResidualGrad_reset
+AgentVT NatResidualGrad_vt = {
+    .name = "Natural Residual Gradient",
+    .start_ep = NatResidualGrad_start_ep,
+    .choose_action = NatResidualGrad_choose_action,
+    .update = NatResidualGrad_update,
+    .end_ep = NatResidualGrad_end_ep,
+    .reset = NatResidualGrad_reset
 };
 
 
-void make_QTNatResidualGrad(QTNatResidualGrad *self, Environment *env,
-                            QFn *qfn, Policy *pi, float alpha, float gamma) {
-    self->super.vt = VT_PTR_AMPER QTNatResidualGrad_vt;
+void make_NatResidualGrad(NatResidualGrad *self, Environment *env,
+                            QFn *qfn, Policy *pi, real alpha, real gamma) {
+    self->super.vt = VT_PTR_AMPER NatResidualGrad_vt;
     self->super.env = env;
     self->qfn = qfn;
     self->pi = pi;
@@ -178,19 +181,148 @@ void make_QTNatResidualGrad(QTNatResidualGrad *self, Environment *env,
     uint d = qfn->approx_arch->indim;
     make_vec(&self->g, d, 0);
     make_vec(&self->v, d, 0);
-    make_mat(&self->Finv, d, d, 0);
-    diag_mat_dmat(&self->Finv, 1);
+    make_mat(&self->Ginv, d, d, 0);
+    diag_mat_dmat(&self->Ginv, 1);
     assert(env->SVT_ACCESS action_space_is_fixed);
     assert(env->SVT_ACCESS deterministic_transition);
     make_elem(&self->nA, &env->SVT_ACCESS fixed_action_space);
 }
 
-void free_QTNatResidualGrad(QTNatResidualGrad *self) {
+void free_NatResidualGrad(NatResidualGrad *self) {
     free_vec(&self->g);
     free_vec(&self->v);
-    free_mat(&self->Finv);
+    free_mat(&self->Ginv);
     free_elem(&self->nA);
 }
+
+// -------------------- NatResidualGrad_ForgettingG ---------------------
+
+typedef struct {
+    Agent super;
+    QFn *qfn;
+    Policy *pi;
+    Mat Ginv;
+    Vec g, v;
+    Elem nA;
+    real alpha, beta, gamma;
+} NatResidualGrad_ForgettingG;
+
+void NatResidualGrad_ForgettingG_start_ep(void *self_, RngState *rngs, Elem *S_0) {
+    NatResidualGrad_ForgettingG *self = self_;
+    self->pi->VT_ACCESS choose_action(self->pi, rngs, S_0, &self->nA);
+}
+
+void NatResidualGrad_ForgettingG_end_ep(void *self_, RngState *rngs, uint T) {}
+
+void NatResidualGrad_ForgettingG_choose_action(void *self_, RngState *rngs, Elem *S,
+                                     Elem *A, uint t) {
+    NatResidualGrad_ForgettingG *self = self_;
+    copy_elem_to_elem(&self->nA,
+                      &self->super.env->SVT_ACCESS fixed_action_space, A);
+}
+
+#define DPR(x) x
+int ttt = 0;
+
+void NatResidualGrad_ForgettingG_update(void *self_, RngState *rngs,
+                         Elem *S, Elem *A, real R, Elem *nS,
+                         uint t, bool is_terminal) {
+    DPR(printf("--------- update t=%u ------------\n", ttt++);)
+    NatResidualGrad_ForgettingG *self = self_;
+    real QSA = Qtheta(self->qfn, S, A);
+    // convenience terms
+    real beta = self->beta;
+    real invcombeta = ((real)1.) / (((real)1.) - beta);
+    // delta_t = R_{t+1} + gamma * Q(S_{t+1}, A_{t+1}) - Q(S_t, A_t)
+    // g_t = partial Q_theta(S_t, A_t)/partial theta
+    //     - gamma*partial Q_theta(S_{t+1}, A_{t+1})/partial theta
+    real delta = R - QSA;
+    dQtheta_dtheta_writo_vec(self->qfn, S, A, &self->g);
+    if (!is_terminal) {
+        self->pi->VT_ACCESS choose_action(self->pi, rngs, nS, &self->nA);
+        delta += self->gamma * Qtheta(self->qfn, nS, &self->nA);
+        scaled_dQtheta_dtheta_addto_dvec(self->qfn, nS, &self->nA,
+                                         -self->gamma, &self->g);
+    }
+    // scale G by 1-beta first
+    scale_mat(&self->Ginv, invcombeta);
+
+    // v = (1-beta) G^{-1}_{t-1} g_t
+    dmat_mul_vec_writo_dvec(&self->Ginv, &self->g, &self->v);
+
+    // update G^{-1} with Sherman-Morrison inverse
+    real a = beta * delta * delta;
+    // real a = beta * delta * delta;
+    real scale = -a / (1 + a*inner_vec(&self->g, &self->v));
+    scaled_self_outer_vec_addto_dmat(&self->v, scale, &self->Ginv);
+
+
+    // v = G^{-1}_t g_t
+    dmat_mul_vec_writo_dvec(&self->Ginv, &self->g, &self->v);
+
+    // update theta
+    scaled_vec_addto_dvec(&self->v, self->alpha * delta, &self->qfn->theta);
+
+    DPR(
+        print_expr(beta, "%.6g");
+        print_expr(a, "%.6g");
+        printf("g:");
+        print_vec(&self->g);
+    )
+    DPR(
+        print_expr(scale, "%.6g");
+        printf("new Ginv:");
+        print_mat(&self->Ginv);
+        printf("new theta:");
+        print_vec(&self->qfn->theta);
+        getchar();
+    )
+}
+
+void NatResidualGrad_ForgettingG_reset(void *self_) {
+    NatResidualGrad_ForgettingG *self = self_;
+    diag_mat_dmat(&self->Ginv, 1);
+    // qfn
+    ZERO_DV(self->qfn->theta)
+    // reset policy: we'll get to it when we get to it
+}
+
+AgentVT NatResidualGrad_ForgettingG_vt = {
+    .name = "Natural Residual Gradient with Forgetting G",
+    .start_ep = NatResidualGrad_ForgettingG_start_ep,
+    .choose_action = NatResidualGrad_ForgettingG_choose_action,
+    .update = NatResidualGrad_ForgettingG_update,
+    .end_ep = NatResidualGrad_ForgettingG_end_ep,
+    .reset = NatResidualGrad_ForgettingG_reset
+};
+
+
+void make_NatResidualGrad_ForgettingG(NatResidualGrad_ForgettingG *self, Environment *env,
+                            QFn *qfn, Policy *pi, real alpha, real beta, real gamma) {
+    self->super.vt = VT_PTR_AMPER NatResidualGrad_ForgettingG_vt;
+    self->super.env = env;
+    self->qfn = qfn;
+    self->pi = pi;
+    self->alpha = alpha;
+    self->beta = beta;
+    self->gamma = gamma;
+    uint d = qfn->approx_arch->indim;
+    make_vec(&self->g, d, 0);
+    make_vec(&self->v, d, 0);
+    make_mat(&self->Ginv, d, d, 0);
+    diag_mat_dmat(&self->Ginv, 1);
+    assert(env->SVT_ACCESS action_space_is_fixed);
+    assert(env->SVT_ACCESS deterministic_transition);
+    make_elem(&self->nA, &env->SVT_ACCESS fixed_action_space);
+}
+
+void free_NatResidualGrad_ForgettingG(NatResidualGrad_ForgettingG *self) {
+    free_vec(&self->g);
+    free_vec(&self->v);
+    free_mat(&self->Ginv);
+    free_elem(&self->nA);
+}
+
 
 // -------------------- SarsaLambda ---------------------------
 
@@ -200,7 +332,7 @@ typedef struct {
     Policy *pi;
     Vec elig;
     Elem nA;
-    float alpha, gamma, lambda;
+    real alpha, gamma, lambda;
 } SarsaLambda;
 
 void SarsaLambda_start_ep(void *self_, RngState *rngs, Elem *S_0) {
@@ -222,8 +354,8 @@ void SarsaLambda_update(void *self_, RngState *rngs,
                         Elem *S, Elem *A, real R, Elem *nS,
                         uint t, bool is_terminal) {
     SarsaLambda *self = self_;
-    float QSA = Qtheta(self->qfn, S, A);
-    float delta = R - QSA;
+    real QSA = Qtheta(self->qfn, S, A);
+    real delta = R - QSA;
     if (!is_terminal) {
         self->pi->VT_ACCESS choose_action(self->pi, rngs, nS, &self->nA);
         delta += self->gamma * Qtheta(self->qfn, nS, &self->nA);
@@ -253,7 +385,7 @@ AgentVT SarsaLambda_vt = {
 
 
 void make_SarsaLambda(SarsaLambda *self, Environment *env, QFn *qfn,
-                      Policy *pi, float alpha, float gamma, float lambda) {
+                      Policy *pi, real alpha, real gamma, real lambda) {
     self->super.vt = VT_PTR_AMPER SarsaLambda_vt;
     self->super.env = env;
     self->qfn = qfn;
@@ -271,39 +403,39 @@ void free_SarsaLambda(SarsaLambda *self) {
     free_elem(&self->nA);
 }
 
-// -------------------- QTNatSarsaLambda ---------------------------
+// -------------------- NatSarsaLambda ---------------------------
 
 typedef struct {
     Agent super;
     QFn *qfn;
     Policy *pi;
-    Mat Finv;
+    Mat Ginv;
     Vec elig, g, v;
     Elem nA;
-    float alpha, gamma, lambda;
-} QTNatSarsaLambda;
+    real alpha, gamma, lambda;
+} NatSarsaLambda;
 
-void QTNatSarsaLambda_start_ep(void *self_, RngState *rngs, Elem *S_0) {
-    QTNatSarsaLambda *self = self_;
+void NatSarsaLambda_start_ep(void *self_, RngState *rngs, Elem *S_0) {
+    NatSarsaLambda *self = self_;
     zero_vec(&self->elig);
     self->pi->VT_ACCESS choose_action(self->pi, rngs, S_0, &self->nA);
 }
 
-void QTNatSarsaLambda_end_ep(void *self_, RngState *rngs, uint T) {}
+void NatSarsaLambda_end_ep(void *self_, RngState *rngs, uint T) {}
 
-void QTNatSarsaLambda_choose_action(void *self_, RngState *rngs,
+void NatSarsaLambda_choose_action(void *self_, RngState *rngs,
                                     Elem *S, Elem *A, uint t) {
-    QTNatSarsaLambda *self = self_;
+    NatSarsaLambda *self = self_;
     copy_elem_to_elem(&self->nA,
                       &self->super.env->SVT_ACCESS fixed_action_space, A);
 }
 uint qq = 0;
-void QTNatSarsaLambda_update(void *self_, RngState *rngs,
+void NatSarsaLambda_update(void *self_, RngState *rngs,
                              Elem *S, Elem *A, real R, Elem *nS,
                              uint t, bool is_terminal) {
-    QTNatSarsaLambda *self = self_;
+    NatSarsaLambda *self = self_;
     // calculte delta
-    float delta = R - Qtheta(self->qfn, S, A);
+    real delta = R - Qtheta(self->qfn, S, A);
     if (!is_terminal) {
         self->pi->VT_ACCESS choose_action(self->pi, rngs, nS, &self->nA);
         delta += self->gamma * Qtheta(self->qfn, nS, &self->nA);
@@ -324,23 +456,23 @@ void QTNatSarsaLambda_update(void *self_, RngState *rngs,
 #endif
 
     // v = G^{-1} g
-    dmat_mul_vec_writo_dvec(&self->Finv, &self->g, &self->v);
+    dmat_mul_vec_writo_dvec(&self->Ginv, &self->g, &self->v);
 
     // update G^{-1} with Sherman-Morrison inverse
-    float scale = -delta*delta
+    real scale = -delta*delta
                 / (1 + delta*delta*inner_vec(&self->g, &self->v));
-    scaled_self_outer_vec_addto_dmat(&self->v, scale, &self->Finv);
+    scaled_self_outer_vec_addto_dmat(&self->v, scale, &self->Ginv);
     qq++;
     // update theta with natural semigradient
-    dmat_mul_vec_writo_dvec(&self->Finv, &self->elig, &self->v);
-    float vmul = self->alpha*delta;
+    dmat_mul_vec_writo_dvec(&self->Ginv, &self->elig, &self->v);
+    real vmul = self->alpha*delta;
     scaled_vec_addto_dvec(&self->v, vmul, &self->qfn->theta);
 
     if (0) {
-        float normv = sqrtf(inner_vec(&self->v, &self->v));
-        float normelig = sqrtf(inner_vec(&self->elig, &self->elig));
-        float bilin = inner_vec(&self->v, &self->elig);
-        print_mat(&self->Finv);
+        real normv = sqrtf(inner_vec(&self->v, &self->v));
+        real normelig = sqrtf(inner_vec(&self->elig, &self->elig));
+        real bilin = inner_vec(&self->v, &self->elig);
+        print_mat(&self->Ginv);
         printf(
             // "delta=%.6f\t"
             // "change=%.6f\t"
@@ -355,30 +487,30 @@ void QTNatSarsaLambda_update(void *self_, RngState *rngs,
     }
 }
 
-void reset_QTNatSarsaLambda(void *self_) {
-    QTNatSarsaLambda *self = self_;
+void reset_NatSarsaLambda(void *self_) {
+    NatSarsaLambda *self = self_;
     // internal states
     // g and v are moreso scratch vecs for calculations, no need to reset
     // since they do not meaningfully carry across from timesteps anyway
     ZERO_DV(self->elig)
-    diag_mat_dmat(&self->Finv, 1);
+    diag_mat_dmat(&self->Ginv, 1);
     // qfn
     ZERO_DV(self->qfn->theta)
     // reset policy: we'll get to it when we get to it
 }
 
-AgentVT QTNatSarsaLambda_vt = {
-    .name = "Quadratic-time Natural Sarsa(lambda)",
-    .start_ep = QTNatSarsaLambda_start_ep,
-    .choose_action = QTNatSarsaLambda_choose_action,
-    .update = QTNatSarsaLambda_update,
-    .end_ep = QTNatSarsaLambda_end_ep,
-    .reset = reset_QTNatSarsaLambda
+AgentVT NatSarsaLambda_vt = {
+    .name = "Natural Sarsa(lambda)",
+    .start_ep = NatSarsaLambda_start_ep,
+    .choose_action = NatSarsaLambda_choose_action,
+    .update = NatSarsaLambda_update,
+    .end_ep = NatSarsaLambda_end_ep,
+    .reset = reset_NatSarsaLambda
 };
 
-void make_QTNatSarsaLambda(QTNatSarsaLambda *self, Environment *env, QFn *qfn,
-                      Policy *pi, float alpha, float gamma, float lambda) {
-    self->super.vt = VT_PTR_AMPER QTNatSarsaLambda_vt;
+void make_NatSarsaLambda(NatSarsaLambda *self, Environment *env, QFn *qfn,
+                      Policy *pi, real alpha, real gamma, real lambda) {
+    self->super.vt = VT_PTR_AMPER NatSarsaLambda_vt;
     self->super.env = env;
     self->qfn = qfn;
     self->pi = pi;
@@ -390,16 +522,16 @@ void make_QTNatSarsaLambda(QTNatSarsaLambda *self, Environment *env, QFn *qfn,
     make_vec(&self->elig, d, 0);
     make_vec(&self->g, d, 0);
     make_vec(&self->v, d, 0);
-    make_mat(&self->Finv, d, d, 0);
-    diag_mat_dmat(&self->Finv, 1);
+    make_mat(&self->Ginv, d, d, 0);
+    diag_mat_dmat(&self->Ginv, 1);
     assert(env->SVT_ACCESS action_space_is_fixed);
     make_elem(&self->nA, &env->SVT_ACCESS fixed_action_space);
 }
 
-void free_QTNatSarsaLambda(QTNatSarsaLambda *self) {
+void free_NatSarsaLambda(NatSarsaLambda *self) {
     free_vec(&self->elig);
     free_vec(&self->g);
     free_vec(&self->v);
-    free_mat(&self->Finv);
+    free_mat(&self->Ginv);
     free_elem(&self->nA);
 }

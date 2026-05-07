@@ -107,6 +107,14 @@ void vec_mat_tests() {
         30,75, 60,
         20,50, 40
     }, A.data.dense, 12, 1e-7));
+    // quick scale_mat test here
+    scale_mat(&A, -2.f);
+    assert(req_arr((real[]){
+        -80, -200, -160,
+        -20, -50,  -40,
+        -60, -150, -120,
+        -40, -100, -80
+    }, A.data.dense, 12, 1e-7));
     A.nrows = 3; A.ncols = 4;
     outer_vec_writo_mat(&v2, &v1, &A);
     assert(!memcmp((real[]){

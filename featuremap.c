@@ -177,7 +177,6 @@ typedef struct {
 
 // Combine S and A feature maps into (S,A) feature map
 // this one is not really meant to be used directly
-// todo at some point: just concat the featuremaps (map to R^{d_S + d_A})
 
 typedef struct {
     SAFeatureMap super;

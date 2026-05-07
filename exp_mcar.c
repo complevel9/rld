@@ -34,20 +34,20 @@ void make_mcar_experiment(Environment **env, Agent **ag, uint agi,
         *ag = (Agent*) rg;
     } break;
     case 1: {
-        QTNatResidualGrad *qnrg = custom_malloc(sizeof *qnrg);
-        make_QTNatResidualGrad(qnrg, *env, qfn, (Policy*)epgreedy,
+        NatResidualGrad *qnrg = custom_malloc(sizeof *qnrg);
+        make_NatResidualGrad(qnrg, *env, qfn, (Policy*)epgreedy,
             hpt[1].r, hpt[2].r);
         *ag = (Agent*) qnrg;
     } break;
-    case 3: {
+    case 2: {
         SarsaLambda *sl = custom_malloc(sizeof *sl);
         make_SarsaLambda(sl, *env, qfn, (Policy*)epgreedy,
             hpt[1].r, hpt[2].r, hpt[3].r);
         *ag = (Agent*) sl;
     } break;
-    case 4: {
-        QTNatSarsaLambda *qnsl = custom_malloc(sizeof *qnsl);
-        make_QTNatSarsaLambda(qnsl, *env, qfn, (Policy*)epgreedy,
+    case 3: {
+        NatSarsaLambda *qnsl = custom_malloc(sizeof *qnsl);
+        make_NatSarsaLambda(qnsl, *env, qfn, (Policy*)epgreedy,
             hpt[1].r, hpt[2].r, hpt[3].r);
         *ag = (Agent*) qnsl;
     } break;
@@ -67,22 +67,22 @@ void free_mcar_experiment(Environment *env_, Agent *ag_, uint agi) {
         free_ResidualGrad(ag);
     } break;
     case 1: {
-        QTNatResidualGrad *ag = (QTNatResidualGrad*) ag_;
+        NatResidualGrad *ag = (NatResidualGrad*) ag_;
         epgreedy = (EpGreedy*) ag->pi;
         qfn = (QFn*) ag->qfn;
-        free_QTNatResidualGrad(ag);
+        free_NatResidualGrad(ag);
     } break;
-    case 3: {
+    case 2: {
         SarsaLambda *ag = (SarsaLambda*) ag_;
         epgreedy = (EpGreedy*) ag->pi;
         qfn = (QFn*) ag->qfn;
         free_SarsaLambda(ag);
     } break;
-    case 4: {
-        QTNatSarsaLambda *ag = (QTNatSarsaLambda*) ag_;
+    case 3: {
+        NatSarsaLambda *ag = (NatSarsaLambda*) ag_;
         epgreedy = (EpGreedy*) ag->pi;
         qfn = (QFn*) ag->qfn;
-        free_QTNatSarsaLambda(ag);
+        free_NatSarsaLambda(ag);
     } break;
     default:
         abort();
@@ -117,7 +117,7 @@ void free_mcar_experiment(Environment *env_, Agent *ag_, uint agi) {
 void mcar_exp_fb_vis(Environment *env_, Agent *ag_, Elem *S, Elem *A, float R,
                      Elem *nS, uint t, void *ep_) {
     // MountainCar *env = (void*)env_;
-    QTNatSarsaLambda *ag = (void*)ag_;
+    NatSarsaLambda *ag = (void*)ag_;
     uint ep = *(uint*)ep_;
     QFn *q = ag->qfn;
 
@@ -246,10 +246,12 @@ Experiment mcar_exp = {
     .make_exp = make_mcar_experiment,
     .free_exp = free_mcar_experiment,
     .visfn = mcar_exp_fb_vis,
-    .steps_per_vis = 0,
-    .nagents = 6, // <-------------------------------------- testing
+    .steps_per_vis = 1,
+    .flags = EXPERIMENT_VIS_REQUIRE_ALLEGRO,
+
+    .nagents = 4,
     .nepisodes = 15,
-    .ntrials = 50,
+    .ntrials = 50000,
     .stuck_timesteps = MC_MAX_T,
 
     .nsamples_hpts  = 500,
@@ -263,16 +265,10 @@ Experiment mcar_exp = {
                 SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_GAMMA,
             }
         },
-        { // qtnat rg
+        { // nat rg
             .nhparams = 3,
             .hparam_search = (HParamSearch[]) {
                 SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_GAMMA,
-            }
-        },
-        { // ltnat rg
-            .nhparams = 4,
-            .hparam_search = (HParamSearch[]) {
-                SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_BETA, SEARCH_GAMMA,
             }
         },
         { // sl
@@ -281,17 +277,10 @@ Experiment mcar_exp = {
                 SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_GAMMA, SEARCH_LAMBDA,
             }
         },
-        { // qtnat sl
+        { // nat sl
             .nhparams = 4,
             .hparam_search = (HParamSearch[]) {
                 SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_GAMMA, SEARCH_LAMBDA,
-            }
-        },
-        { // ltnat sl
-            .nhparams = 5,
-            .hparam_search = (HParamSearch[]) {
-                SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_BETA, SEARCH_GAMMA,
-                SEARCH_LAMBDA,
             }
         },
     },
@@ -299,15 +288,11 @@ Experiment mcar_exp = {
         // epsilon        // alpha         // gamma         // lambda         // beta
         (HParam[]) // rg; mean ret=-249.42
         {{.r=0.00022221}, {.r=0.16062324}, {.r=0.96570992}},
-        (HParam[]) // qtnat rg; mean ret=-263.27
+        (HParam[]) // nat rg; mean ret=-263.27
         {{.r=0.00001640}, {.r=0.11993723}, {.r=0.98075956}},
-        (HParam[]) // ltnat rg;
-        {},
         (HParam[]) // sl; mean ret=-193.29
         {{.r=0.00047899}, {.r=0.09324095}, {.r=0.99973625}, {.r=0.22648823}},
-        (HParam[]) // qtnat sl; mean ret=-142.66
+        (HParam[]) // nat sl; mean ret=-142.66
         {{.r=0.00049613}, {.r=0.17115353}, {.r=0.99950778}, {.r=0.00953287}},
-        (HParam[]) // ltnat sl;
-        {},
     }
 };
