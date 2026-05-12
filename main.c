@@ -103,11 +103,11 @@ void destroy_allegro() {
 
 // agent index list: select a list of agents instead of running all of them
 // terminate the list with 0
-#define AGI_LIST {2, 0}
+#define AGI_LIST {3, 0}
 
 #include "colormap.c"
 
-FILE *fp_theta = NULL;
+FILE *fp_ret = NULL, *fp_theta = NULL, *fp_metric;
 #include "experiment.c"
 #include "exp_flip.c"
 #include "exp_mcar.c"
@@ -150,13 +150,19 @@ int main(int argc, char **argv) {
 
     // run_exp(&mcar_exp, &rngs);
 
-    FILE* fp;
+    FILE* fp = NULL;
     // fp = stdout;
-    fp = fopen("flip.csv", "w");
-    // fp_theta = fopen("theta.csv", "w");
+    // fp = fopen("flip.csv", "w");
+    fp_ret    = fopen("ret.csv",   "w");
+    fp_theta  = fopen("theta.csv", "w");
+    fp_metric = fopen("metric.csv", "w");
+
     run_exp(&flip_exp, &rngs, fp);
-    fclose(fp);
-    // fclose(fp_theta);
+
+    // fclose(fp);
+    fclose(fp_ret);
+    fclose(fp_theta);
+    fclose(fp_metric);
 
     destroy_allegro();
 

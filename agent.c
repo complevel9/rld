@@ -195,7 +195,7 @@ void free_NatResidualGrad(NatResidualGrad *self) {
     free_elem(&self->nA);
 }
 
-// -------------------- NatResidualGrad_ForgettingG ---------------------
+// -------------------- NatResidualGrad_ForgetfulG ---------------------
 
 typedef struct {
     Agent super;
@@ -204,31 +204,32 @@ typedef struct {
     Mat Ginv;
     Vec g, v;
     Elem nA;
-    real alpha, beta, gamma;
-} NatResidualGrad_ForgettingG;
+    real alpha, beta, gamma, errclip; // errclip has no effect for aem
+    bool aem; // set to true to absolute error metric
+} NatResidualGrad_ForgetfulG;
 
-void NatResidualGrad_ForgettingG_start_ep(void *self_, RngState *rngs, Elem *S_0) {
-    NatResidualGrad_ForgettingG *self = self_;
+void NatResidualGrad_ForgetfulG_start_ep(void *self_, RngState *rngs, Elem *S_0) {
+    NatResidualGrad_ForgetfulG *self = self_;
     self->pi->VT_ACCESS choose_action(self->pi, rngs, S_0, &self->nA);
 }
 
-void NatResidualGrad_ForgettingG_end_ep(void *self_, RngState *rngs, uint T) {}
+void NatResidualGrad_ForgetfulG_end_ep(void *self_, RngState *rngs, uint T) {}
 
-void NatResidualGrad_ForgettingG_choose_action(void *self_, RngState *rngs, Elem *S,
+void NatResidualGrad_ForgetfulG_choose_action(void *self_, RngState *rngs, Elem *S,
                                      Elem *A, uint t) {
-    NatResidualGrad_ForgettingG *self = self_;
+    NatResidualGrad_ForgetfulG *self = self_;
     copy_elem_to_elem(&self->nA,
                       &self->super.env->SVT_ACCESS fixed_action_space, A);
 }
 
-#define DPR(x) x
+#define DPR(x)
 int ttt = 0;
 
-void NatResidualGrad_ForgettingG_update(void *self_, RngState *rngs,
+void NatResidualGrad_ForgetfulG_update(void *self_, RngState *rngs,
                          Elem *S, Elem *A, real R, Elem *nS,
                          uint t, bool is_terminal) {
     DPR(printf("--------- update t=%u ------------\n", ttt++);)
-    NatResidualGrad_ForgettingG *self = self_;
+    NatResidualGrad_ForgetfulG *self = self_;
     real QSA = Qtheta(self->qfn, S, A);
     // convenience terms
     real beta = self->beta;
@@ -251,11 +252,12 @@ void NatResidualGrad_ForgettingG_update(void *self_, RngState *rngs,
     dmat_mul_vec_writo_dvec(&self->Ginv, &self->g, &self->v);
 
     // update G^{-1} with Sherman-Morrison inverse
-    real a = beta * delta * delta;
-    // real a = beta * delta * delta;
+    real a = beta;
+    if (!self->aem)
+        a *= rmax(self->errclip, delta * delta);
+    // printf("log(delta^-2)=%.20g\n", delta);
     real scale = -a / (1 + a*inner_vec(&self->g, &self->v));
     scaled_self_outer_vec_addto_dmat(&self->v, scale, &self->Ginv);
-
 
     // v = G^{-1}_t g_t
     dmat_mul_vec_writo_dvec(&self->Ginv, &self->g, &self->v);
@@ -279,33 +281,36 @@ void NatResidualGrad_ForgettingG_update(void *self_, RngState *rngs,
     )
 }
 
-void NatResidualGrad_ForgettingG_reset(void *self_) {
-    NatResidualGrad_ForgettingG *self = self_;
+void NatResidualGrad_ForgetfulG_reset(void *self_) {
+    NatResidualGrad_ForgetfulG *self = self_;
     diag_mat_dmat(&self->Ginv, 1);
     // qfn
     ZERO_DV(self->qfn->theta)
     // reset policy: we'll get to it when we get to it
 }
 
-AgentVT NatResidualGrad_ForgettingG_vt = {
-    .name = "Natural Residual Gradient with Forgetting G",
-    .start_ep = NatResidualGrad_ForgettingG_start_ep,
-    .choose_action = NatResidualGrad_ForgettingG_choose_action,
-    .update = NatResidualGrad_ForgettingG_update,
-    .end_ep = NatResidualGrad_ForgettingG_end_ep,
-    .reset = NatResidualGrad_ForgettingG_reset
+AgentVT NatResidualGrad_ForgetfulG_vt = {
+    .name = "Natural Residual Gradient with Forgetful G",
+    .start_ep = NatResidualGrad_ForgetfulG_start_ep,
+    .choose_action = NatResidualGrad_ForgetfulG_choose_action,
+    .update = NatResidualGrad_ForgetfulG_update,
+    .end_ep = NatResidualGrad_ForgetfulG_end_ep,
+    .reset = NatResidualGrad_ForgetfulG_reset
 };
 
 
-void make_NatResidualGrad_ForgettingG(NatResidualGrad_ForgettingG *self, Environment *env,
-                            QFn *qfn, Policy *pi, real alpha, real beta, real gamma) {
-    self->super.vt = VT_PTR_AMPER NatResidualGrad_ForgettingG_vt;
+void make_NatResidualGrad_ForgetfulG(NatResidualGrad_ForgetfulG *self, Environment *env,
+                            QFn *qfn, Policy *pi, real alpha, real beta, real gamma,
+                            bool aem, real errclip) {
+    self->super.vt = VT_PTR_AMPER NatResidualGrad_ForgetfulG_vt;
     self->super.env = env;
     self->qfn = qfn;
     self->pi = pi;
     self->alpha = alpha;
     self->beta = beta;
     self->gamma = gamma;
+    self->aem = aem;
+    self->errclip = errclip;
     uint d = qfn->approx_arch->indim;
     make_vec(&self->g, d, 0);
     make_vec(&self->v, d, 0);
@@ -316,7 +321,7 @@ void make_NatResidualGrad_ForgettingG(NatResidualGrad_ForgettingG *self, Environ
     make_elem(&self->nA, &env->SVT_ACCESS fixed_action_space);
 }
 
-void free_NatResidualGrad_ForgettingG(NatResidualGrad_ForgettingG *self) {
+void free_NatResidualGrad_ForgetfulG(NatResidualGrad_ForgetfulG *self) {
     free_vec(&self->g);
     free_vec(&self->v);
     free_mat(&self->Ginv);

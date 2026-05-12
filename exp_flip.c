@@ -49,16 +49,22 @@ void make_flip_experiment(Environment **env, Agent **ag, uint agi,
         *ag = (Agent*) rg;
     } break;
     case 1: {
-        QTNatResidualGrad *qtnatrg = custom_malloc(sizeof *qtnatrg);
-        make_QTNatResidualGrad(qtnatrg, *env, qfn, (Policy*) epgreedy,
+        NatResidualGrad *natrg = custom_malloc(sizeof *natrg);
+        make_NatResidualGrad(natrg, *env, qfn, (Policy*) epgreedy,
             hpt[0].r, 0.f); // alpha, gamma
-        *ag = (Agent*) qtnatrg;
+        *ag = (Agent*) natrg;
     } break;
     case 2: {
-        QTNatResidualGrad_FG *qtnatrg_fg = custom_malloc(sizeof *qtnatrg_fg);
-        make_QTNatResidualGrad_FG(qtnatrg_fg, *env, qfn, (Policy*) epgreedy,
-            hpt[0].r, hpt[1].r, 0.f); // alpha, beta, gamma
-        *ag = (Agent*) qtnatrg_fg;
+        NatResidualGrad_ForgetfulG *natrg_fg = custom_malloc(sizeof *natrg_fg);
+        make_NatResidualGrad_ForgetfulG(natrg_fg, *env, qfn, (Policy*) epgreedy,
+            hpt[0].r, hpt[1].r, 0.f, false, 0.5f); // alpha, beta, gamma, no absolute error G, errclip
+        *ag = (Agent*) natrg_fg;
+    } break;
+    case 3: {
+        NatResidualGrad_ForgetfulG *natrg_faeg = custom_malloc(sizeof *natrg_faeg);
+        make_NatResidualGrad_ForgetfulG(natrg_faeg, *env, qfn, (Policy*) epgreedy,
+            hpt[0].r, hpt[1].r, 0.f, true, 0.f); // alpha, beta, gamma, absolute error G, errclip
+        *ag = (Agent*) natrg_faeg;
     } break;
     // case 2: {
         // xx *yy = custom_malloc(sizeof *yy);
@@ -76,19 +82,30 @@ void make_flip_experiment(Environment **env, Agent **ag, uint agi,
     }
 }
 
-void print_Q_flip(Environment *env_, Agent *ag_, Elem *S, Elem *A, float R,
+Experiment flip_exp;
+void print_flip(Environment *env_, Agent *ag_, Elem *S, Elem *A, float R,
                   Elem *nS, uint t, void *ep_) {
-    QTNatResidualGrad_FG *ag = (void*)ag_; // this is a hack to get qfn
+    NatResidualGrad_ForgetfulG *ag = (void*)ag_; // this is a hack to get qfn
     uint ep = *(uint*)ep_;
     QFn *q = ag->qfn;
 
     // printf("theta: ");
     // print_vec(&q->theta);
     // print_mat(&ag->Ginv);
-    // fprintf(stdout, "%.6g,%.6g%c",
-    //   q->theta.data.dense[0],
-    //   q->theta.data.dense[1],
-    //   ep < 1000-1 ? ',' : '\n');
+    fprintf(fp_theta, "%.6g,%.6g%c",
+      q->theta.data.dense[0],
+      q->theta.data.dense[1],
+      ep == flip_exp.nepisodes - 1 ? '\n' : ',');
+    fprintf(fp_ret, "%.6g%c", R,
+      ep == flip_exp.nepisodes - 1 ? '\n' : ',');
+    // more hacks - checks name for 'N'(atural), Ginvs has same struct offsets
+    if (ag_->VT_ACCESS name[0] == 'N') {
+        fprintf(fp_metric, "%.6g,%.6g%c",
+          ag->Ginv.data.dense[0],
+          ag->Ginv.data.dense[3],
+          ep == flip_exp.nepisodes - 1 ? '\n' : ',');
+    }
+
     // getchar();
 
     return;
@@ -105,33 +122,10 @@ void free_flip_experiment(Environment *env_, Agent *ag_, uint agi) {
                 qfn = (QFn*) ag->qfn; \
                 free_ ## name (ag); \
             } break;
-    // case 0: {
-    //     ResidualGrad *ag = (ResidualGrad*) ag_;
-    //     epgreedy = (EpGreedy*) ag->pi;
-    //     qfn = (QFn*) ag->qfn;
-    //     free_ResidualGrad(ag);
-    // } break;
-    // case 1: {
-    //     QTNatResidualGrad *ag = (QTNatResidualGrad*) ag_;
-    //     epgreedy = (EpGreedy*) ag->pi;
-    //     qfn = (QFn*) ag->qfn;
-    //     free_QTNatResidualGrad(ag);
-    // } break;
-    // case 2: {
-    //     ResidualGrad *ag = (ResidualGrad*) ag_;
-    //     epgreedy = (EpGreedy*) ag->pi;
-    //     qfn = (QFn*) ag->qfn;
-    //     free_ResidualGrad(ag);
-    // } break;
         EXTRACT_EPGREEDY_QFN(0, ResidualGrad)
-        EXTRACT_EPGREEDY_QFN(1, QTNatResidualGrad)
-        EXTRACT_EPGREEDY_QFN(2, QTNatResidualGrad_FG)
-    // case 1: {
-    //     ResidualGrad *ag = (ResidualGrad*) ag_;
-    //     epgreedy = (EpGreedy*) ag->pi;
-    //     qfn = (QFn*) ag->qfn;
-    //     free_ResidualGrad(ag);
-    // } break;
+        EXTRACT_EPGREEDY_QFN(1, NatResidualGrad)
+        EXTRACT_EPGREEDY_QFN(2, NatResidualGrad_ForgetfulG)
+        EXTRACT_EPGREEDY_QFN(3, NatResidualGrad_ForgetfulG)
     default:
         abort();
     }
@@ -157,22 +151,24 @@ void free_flip_experiment(Environment *env_, Agent *ag_, uint agi) {
 Experiment flip_exp = {
     .make_exp = make_flip_experiment,
     .free_exp = free_flip_experiment,
-    .visfn = print_Q_flip,
+    .visfn = print_flip,
     .steps_per_vis = 1,
     .flags = 0,
 
     .nagents = 3,
     .nepisodes = 8000,
-    .ntrials = 1,
-    .stuck_timesteps = MC_MAX_T,
+    .ntrials = 20,
+    .stuck_timesteps = 2,
 
     .best_hpt_for_ag = (HParam*[]) {
         // alpha      // beta      // lambda
         (HParam[]) // rg;
         {{.r=0.01}},
-        (HParam[]) // qtnatrg;
+        (HParam[]) // natrg;
         {{.r=0.2}},
-        (HParam[]) // qtnatrg_fg;
-        {{.r=0.01},    {.r=0.005}},
+        (HParam[]) // natrg_fg;
+        {{.r=0.01},    {.r=0.01}},
+        (HParam[]) // natrg_faeg;
+        {{.r=0.01},    {.r=0.01}},
     }
 };

@@ -3,61 +3,116 @@
 
 import csv
 import matplotlib.pyplot as plt
+import numpy as np
+import argparse
 
-# sl = [-462, -294, -230, -208, -215, -180, -182, -187, -183, -175, -198, -176, -188, -187, -187][:10]
-# nsl = [-306, -227, -226, -198, -184, -172, -194, -183, -166, -164, -162, -168, -152, -160, -154][:10]
-# plt.plot(sl, label="Sarsa(λ)")
-# plt.plot(nsl, label="Natural Sarsa(λ)")
-
-# rg = [-567, -613, -401, -388, -404, -324, -296, -330, -261, -295, -250, -228, -219, -232, -211][:10]
-# nrg = [-570, -523, -379, -442, -379, -314, -291, -285, -291, -290, -280, -230, -270, -249, -240][:10]
-
-# plt.plot(rg, label="RG")
-# plt.plot(nrg, label="Natural RG")
-
-
-# with open('flip.csv', newline='') as csvfile:
-# 	reader = csv.reader(csvfile)
-# 	for row in reader:
-# 		mean_ret = [float(x) for x in row[0:]]
-# 		plt.plot(mean_ret, label='idk')
+parser = argparse.ArgumentParser(description="Plot graphs. May require manual tweaking.")
+parser.add_argument('-s', '--save', type=str)
+args = parser.parse_args()
+save = args.save
 
 plt.rcParams.update({'font.size': 8})
 
 
-plt.figure(figsize=(4, 3))
-ax = plt.gca()
+def plot_ema(vals, f=0.1):
+	k = 1 - f
+	ema = []
+	expsum = 0
+	for i in range(len(vals)):
+		expsum *= k
+		expsum += vals[i]
+		ema.append(expsum / (1-k**(i+1)) * (1-k))
+	plt.plot(ema, linewidth=0.5)
 
-with open('flip.csv', newline='') as csvfile:
+def plot_sma(vals, n=8):
+	sma = []
+	nsum = 0
+	for i in range(len(vals)):
+		nsum += vals[i]
+		if i-n >= 0:
+			nsum -= vals[i-n]
+		sma.append(nsum / min(n,i+1))
+	plt.plot(sma, linewidth=0.5)
+
+def plot2_split(vals, labela=None, labelb=None):
+	a, b = vals[0::2], vals[1::2]
+	plt.plot(a, linewidth=0.5, color='orange', label=labela)
+	plt.plot(b, linewidth=0.5, color='blue', label=labelb)
+	if (labela is not None) or (labelb is not None):
+		ax = plt.gca()
+		ax.legend(loc='best')
+
+
+# ====================================== Return
+
+plt.figure(figsize=(4, 3))
+with open('ret.csv') as csvfile:
 	reader = csv.reader(csvfile)
 	for row in reader:
-		rets = [float(x) for x in row[0:]]
-		k = 0.99
-		expavg_rets = []
-		expsum = 0
-		for i in range(len(rets)):
-			expsum *= k
-			expsum += rets[i]
-			expavg_rets.append(expsum / (1-k**(i+1)) * (1-k))
-		plt.plot(expavg_rets, linewidth=0.5)
-
-
-plt.title("RG ($\\alpha=0.01$) on Flip(2000)")
+		vals = [float(x) for x in row]
+		plot_ema(vals, 0.05)
 
 plt.xlabel("Episodes")
-# ax.ylabel("Mean return")
-plt.ylabel("EMA return")
-
-# ax.legend(loc='lower right')
-
+# plt.ylabel("Mean return")
+plt.ylabel("Return")
+plt.yticks(np.arange(0, 1.1, 0.1))
 plt.grid(which='major')
-
-for tick in ax.get_xticklabels():
-    tick.set_fontsize(8)
-for tick in ax.get_yticklabels():
-    tick.set_fontsize(8)
-
 plt.tight_layout()
 
-plt.show()
-# plt.savefig('flip2k-20rg-ema0.01.pdf')
+if save:
+	name = save + '-ret.pdf'
+	plt.savefig(name)
+	print('saved ' + name)
+else:
+	plt.show()
+
+# ====================================== Action values
+
+plt.figure(figsize=(4, 3))
+with open('theta.csv') as csvfile:
+	reader = csv.reader(csvfile)
+	# labels = ['Top', 'Bottom']
+	for row in reader:
+		vals = [float(x) for x in row]
+		# plot2_split(vals, *labels)
+		plot2_split(vals)
+		# labels = [None, None]
+
+plt.xlabel("Episodes")
+plt.ylabel("Action value estimate")
+# plt.yticks(np.arange(0, 1.1, 0.2))
+plt.grid(which='major')
+plt.tight_layout()
+
+if save:
+	name = save + '-theta.pdf'
+	plt.savefig(name)
+	print('saved ' + name)
+else:
+	plt.show()
+
+# ====================================== G^{-1} diagonals
+
+plt.figure(figsize=(4, 3))
+with open('metric.csv') as csvfile:
+	reader = csv.reader(csvfile)
+	# labels = ['Top', 'Bottom']
+	for row in reader:
+		vals = [float(x) for x in row]
+		# plot2_split(vals, *labels)
+		plot2_split(vals)
+		# labels = [None, None]
+
+plt.xlabel("Episodes")
+plt.ylabel("$\\mathbf{\\hat G}^{-1}$ diagonal components")
+plt.gca().set_yscale('log', base=10)
+# plt.yticks(np.arange(0, 1.1, 0.1))
+plt.grid(which='major')
+plt.tight_layout()
+
+if save:
+	name = save + '-metric.pdf'
+	plt.savefig(name)
+	print('saved ' + name)
+else:
+	plt.show()

@@ -290,7 +290,7 @@ void run_exp(Experiment *exp, RngState *rngs, FILE *outfp) {
     {
         memset(ret_sum, 0, exp->nepisodes * sizeof(real));
 
-            Agent *ag;
+        Agent *ag;
         Environment *env;
         exp->make_exp(&env, &ag, agi, exp->best_hpt_for_ag[agi], false);
         printf("Agent name: %s\n", ag->VT_ACCESS name);
@@ -303,7 +303,7 @@ void run_exp(Experiment *exp, RngState *rngs, FILE *outfp) {
                                      0);
                 ret_sum[ep] += G;
                 // print per-trial undiscounted returns
-                #if 1
+                #if 0
                     // printf("%u\t", T);
                     if (!outfp) { // out to stdout
                         printf("%.0f\t", G);
