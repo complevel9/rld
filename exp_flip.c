@@ -126,6 +126,7 @@ void free_flip_experiment(Environment *env_, Agent *ag_, uint agi) {
         EXTRACT_EPGREEDY_QFN(1, NatResidualGrad)
         EXTRACT_EPGREEDY_QFN(2, NatResidualGrad_ForgetfulG)
         EXTRACT_EPGREEDY_QFN(3, NatResidualGrad_ForgetfulG)
+    #undef EXTRACT_EPGREEDY_QFN
     default:
         abort();
     }

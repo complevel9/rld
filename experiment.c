@@ -37,18 +37,22 @@ void sample_hparams_tuple(RngState *rngs, HParamsTupleSearch *hpts,
 }
 
 void print_hparams_tuple(HParamsTupleSearch *hpts, HParam *hpt) {
+    fputs("{", stdout);
+    for (uint i = 0; i < hpts->nhparams; i++) {
+        HParamSearch hps = hpts->hparam_search[i];
+        printf("%s,", hps.name);
+    }
+    fputs("} = {", stdout);
     for (uint i = 0; i < hpts->nhparams; i++) {
         HParamSearch hps = hpts->hparam_search[i];
         if (hps.sset.type=='r')
-            printf("%s=%.8f ", hps.name, hpt[i].r);
+            printf("{.r=%.8f}, ", hpt[i].r);
         else if (hps.sset.type=='d')
-            printf("%s=%u ", hps.name, hpt[i].i);
-        else {
-            // printf("abort tid=%u\n", hps.uthrash);
+            printf("{.i=%u}, ", hpt[i].i);
+        else
             abort();
-        }
     }
-    putchar('\n');
+    puts("}");
 }
 
 
@@ -70,9 +74,8 @@ typedef struct {
 } Experiment;
 
 #define EXPERIMENT_VIS_REQUIRE_ALLEGRO 0x1
+#define EXPERIMENT_RUN_GETCH           0x2
 
-
-#define RUN_GETCH 1
 
 uint run_episode(RngState *rngs, Environment *env, Agent *ag, real *outG,
                  uint steps_per_vis, Visfn vis, void *visinfo,
@@ -133,11 +136,16 @@ uint run_episode(RngState *rngs, Environment *env, Agent *ag, real *outG,
             is_terminal = env->VT_ACCESS
                 transition(env, rngs, Sp, &A, &R, nSp, t);
             G += R;
-            ag->VT_ACCESS update(ag, rngs, Sp, &A, R, nSp, t, is_terminal);
+            bool diverged = ag->VT_ACCESS update(ag, rngs, Sp, &A, R, nSp, t, is_terminal);
+
+            if (diverged) {
+                G = FLOAT_VERY_SMALL;
+                goto panic_end;
+            }
             // uhhhhh somethings wrong
             if (t % 20000 == 19999)
                 printf("uhhhh... %u\n", t);
-            if (flags & RUN_GETCH) {
+            if (flags & EXPERIMENT_RUN_GETCH) {
                 printf("---- t=%u\n", t);
                 printf("S:");
                 print_elem(Sp, &env->SVT_ACCESS state_space);
@@ -159,6 +167,7 @@ uint run_episode(RngState *rngs, Environment *env, Agent *ag, real *outG,
         }
     }
 
+    panic_end:
     free_elem(&A);
     free_elem(&S);
     free_elem(&nS);
@@ -170,7 +179,6 @@ uint run_episode(RngState *rngs, Environment *env, Agent *ag, real *outG,
     *outG = G;
     return t;
 }
-
 
 void search_hpt(Experiment *exp, RngState *base_rngs) {
 
@@ -191,7 +199,9 @@ void search_hpt(Experiment *exp, RngState *base_rngs) {
         real best_ret_mean = FLOAT_VERY_SMALL;
 
         // note that inside omp parallel, OpenBLAS always use 1 thread
+#ifdef _OPENMP
         #pragma omp parallel default(firstprivate) shared(best_ret_mean)
+#endif
         {
 #ifdef _OPENMP
             int tid = omp_get_thread_num();
@@ -226,7 +236,7 @@ void search_hpt(Experiment *exp, RngState *base_rngs) {
                 exp->make_exp(&env, &ag, agi, hpt, true);
                 if (hpti == 0 && tid == 0)
                     printf("Agent name: %s\n", ag->VT_ACCESS name);
-                real ret_mean = 0; // mean return across trials & eps
+                double ret_mean = 0; // mean return across trials & eps
                 uint total_eps = 0;
                 for (uint tr = 0; tr < exp->ntrials_hpts; tr++) {
                     ag->VT_ACCESS reset(ag);
@@ -234,15 +244,17 @@ void search_hpt(Experiment *exp, RngState *base_rngs) {
                         float G;
                         uint T = run_episode(&rngs, env, ag, &G,
                             0, NULL, &e, 0);
+                            // exp->steps_per_vis, exp->visfn, &e, exp->flags);
                         if (T >= exp->stuck_timesteps_hpt)
                             goto stuck;
 
                         // update mean return
                         total_eps++;
-                        float mrlr = 1.f / total_eps;
-                        ret_mean = ret_mean*(1.f-mrlr) + G*mrlr;
+                        ret_mean += G;
+                        // printf("G: %.5f, rm=%.5f\n", G, ret_mean);
                     }
                 }
+                ret_mean /= total_eps;
                 // update thread's best
                 if (ret_mean > local_best_ret_mean) {
                     local_best_ret_mean = ret_mean;
@@ -255,7 +267,9 @@ void search_hpt(Experiment *exp, RngState *base_rngs) {
                 exp->free_exp(env, ag, agi);
             }
             // reduce max from threads
+#ifdef _OPENMP
             #pragma omp critical
+#endif
                 if (local_best_ret_mean > best_ret_mean) {
                     best_ret_mean = local_best_ret_mean;
                     memcpy(best_hpt, local_best_hpt,
@@ -294,13 +308,14 @@ void run_exp(Experiment *exp, RngState *rngs, FILE *outfp) {
         Environment *env;
         exp->make_exp(&env, &ag, agi, exp->best_hpt_for_ag[agi], false);
         printf("Agent name: %s\n", ag->VT_ACCESS name);
+        print_hparams_tuple(&exp->hptss[agi], exp->best_hpt_for_ag[agi]);
         for (uint tr = 0; tr < exp->ntrials; tr++) {
             ag->VT_ACCESS reset(ag);
             for (uint ep = 0; ep < exp->nepisodes; ep++) {
                 float G;
                 uint T = run_episode(rngs, env, ag, &G,
                                      exp->steps_per_vis, exp->visfn, &ep,
-                                     0);
+                                     exp->flags);
                 ret_sum[ep] += G;
                 // print per-trial undiscounted returns
                 #if 0

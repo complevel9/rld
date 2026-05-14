@@ -97,7 +97,7 @@ typedef struct {
 } MountainCar;
 
 #define MC_FL_STOPSHORT 1
-#define MC_STOPSHORT_MAX_T 5000
+#define MC_STOPSHORT_MAX_T 10000
 #define MC_MAX_T 10000
 
 extern inline void MountainCar_start_state(void *self_, RngState *s, Elem *S);

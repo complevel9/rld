@@ -43,76 +43,118 @@ def plot2_split(vals, labela=None, labelb=None):
 		ax.legend(loc='best')
 
 
-# ====================================== Return
 
-plt.figure(figsize=(4, 3))
-with open('ret.csv') as csvfile:
-	reader = csv.reader(csvfile)
-	for row in reader:
-		vals = [float(x) for x in row]
-		plot_ema(vals, 0.05)
+# ====================================== Mean Return (MC)
 
-plt.xlabel("Episodes")
-# plt.ylabel("Mean return")
-plt.ylabel("Return")
-plt.yticks(np.arange(0, 1.1, 0.1))
-plt.grid(which='major')
-plt.tight_layout()
+# colors = ["black", "red", "green", "blue"]
+# labels = ['RG', 'Natural RG', 'Natural RG-FG (error clipping)', 'Natural RG-FAEG']
+labels = ['Sarsa(λ)', 'Natural Sarsa(λ)', 'Natural Sarsa(λ)-FG (error clipping)', 'Natural Sarsa(λ)-FAEG']
+ntrials = 2000
 
-if save:
-	name = save + '-ret.pdf'
-	plt.savefig(name)
-	print('saved ' + name)
-else:
-	plt.show()
+if True:
+	plt.figure(figsize=(4, 3))
+	with open('ret.csv') as csvfile:
+		reader = csv.reader(csvfile)
+		irow = 0
+		avg = 0
+		for row in reader:
+			vals = np.array([float(x) for x in row])
+			avg += vals
+			if irow % ntrials == ntrials - 1:
+				avg = avg / ntrials
+				plt.plot(avg, linewidth=0.5, label=labels[irow // ntrials])
+				avg = 0
+			irow += 1
+
+	plt.xlabel("Episodes")
+	plt.ylabel("Mean return")
+	# plt.ylabel("Return")
+	plt.grid(which='major')
+	plt.gca().legend(loc='lower right')
+	plt.tight_layout()
+
+	if save:
+		name = save + '-ret.pdf'
+		plt.savefig(name)
+		print('saved ' + name)
+	else:
+		plt.show()
+
+
+# ====================================== Return (Flip)
+
+if False:
+	plt.figure(figsize=(4, 3))
+	with open('ret.csv') as csvfile:
+		reader = csv.reader(csvfile)
+		for row in reader:
+			vals = [float(x) for x in row]
+			plot_ema(vals, 0.05)
+
+	plt.xlabel("Episodes")
+	# plt.ylabel("Mean return")
+	# plt.ylabel("Return")
+	plt.ylabel("Undiscounted full return")
+	# plt.yticks(np.arange(0, 1.1, 0.1))
+	plt.grid(which='major')
+	plt.tight_layout()
+
+	if save:
+		name = save + '-ret.pdf'
+		plt.savefig(name)
+		print('saved ' + name)
+	else:
+		plt.show()
 
 # ====================================== Action values
 
-plt.figure(figsize=(4, 3))
-with open('theta.csv') as csvfile:
-	reader = csv.reader(csvfile)
-	# labels = ['Top', 'Bottom']
-	for row in reader:
-		vals = [float(x) for x in row]
-		# plot2_split(vals, *labels)
-		plot2_split(vals)
-		# labels = [None, None]
+if False:
+	plt.figure(figsize=(4, 3))
+	with open('theta.csv') as csvfile:
+		reader = csv.reader(csvfile)
+		# labels = ['Top', 'Bottom']
+		for row in reader:
+			vals = [float(x) for x in row]
+			# plot2_split(vals, *labels)
+			plot2_split(vals)
+			# labels = [None, None]
 
-plt.xlabel("Episodes")
-plt.ylabel("Action value estimate")
-# plt.yticks(np.arange(0, 1.1, 0.2))
-plt.grid(which='major')
-plt.tight_layout()
+	plt.xlabel("Episodes")
+	plt.ylabel("Action value estimate")
+	# plt.yticks(np.arange(0, 1.1, 0.2))
+	plt.grid(which='major')
+	plt.tight_layout()
 
-if save:
-	name = save + '-theta.pdf'
-	plt.savefig(name)
-	print('saved ' + name)
-else:
-	plt.show()
+	if save:
+		name = save + '-theta.pdf'
+		plt.savefig(name)
+		print('saved ' + name)
+	else:
+		plt.show()
 
 # ====================================== G^{-1} diagonals
 
-plt.figure(figsize=(4, 3))
-with open('metric.csv') as csvfile:
-	reader = csv.reader(csvfile)
-	# labels = ['Top', 'Bottom']
-	for row in reader:
-		vals = [float(x) for x in row]
-		# plot2_split(vals, *labels)
-		plot2_split(vals)
-		# labels = [None, None]
+if False:
+	plt.figure(figsize=(4, 3))
+	with open('metric.csv') as csvfile:
+		reader = csv.reader(csvfile)
+		# labels = ['Top', 'Bottom']
+		for row in reader:
+			vals = [float(x) for x in row]
+			# plot2_split(vals, *labels)
+			plot2_split(vals)
+			# labels = [None, None]
 
-plt.xlabel("Episodes")
-plt.ylabel("$\\mathbf{\\hat G}^{-1}$ diagonal components")
-plt.gca().set_yscale('log', base=10)
-# plt.yticks(np.arange(0, 1.1, 0.1))
-plt.grid(which='major')
-plt.tight_layout()
+	plt.xlabel("Episodes")
+	plt.ylabel("$\\mathbf{\\hat G}^{-1}$ diagonal components")
+	plt.gca().set_yscale('log', base=10)
+	# plt.yticks(np.arange(0, 1.1, 0.1))
+	plt.grid(which='major')
+	plt.tight_layout()
 
-if save:
-	name = save + '-metric.pdf'
-	plt.savefig(name)
-	print('saved ' + name)
-else:
-	plt.show()
+	if save:
+		name = save + '-metric.pdf'
+		plt.savefig(name)
+		print('saved ' + name)
+	else:
+		plt.show()

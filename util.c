@@ -100,8 +100,8 @@ void rand_jump(RngState *s) {
 #endif
 
 // INFINITY is slow to process
-#define FLOAT_VERY_LARGE +9.9999e+60
-#define FLOAT_VERY_SMALL -9.9999e+60
+#define FLOAT_VERY_LARGE +9.9999e+20
+#define FLOAT_VERY_SMALL -9.9999e+20
 
 // -------------------- Math utils ----------------------------
 

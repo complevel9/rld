@@ -1,16 +1,20 @@
+#define EVALUATE_GRADIENT_OF_TERMINAL_STATE
+#define DIVERGED_DELTA 1000
+
 // -------------------- Agent ----------------------------------
 
 typedef struct {
     void (*choose_action)(void *self_, RngState *rngs,
                           Elem *S, Elem *A, uint t);
-    void (*update)       (void *self_, RngState *rngs,
+    // returns true if diverged
+    bool (*update)       (void *self_, RngState *rngs,
                           Elem *S, Elem *A, real R, Elem *nS,
                           uint t, bool is_terminal);
     void (*start_ep)     (void *self_, RngState *rngs, Elem *S_0);
     // might not be called for continuing mdp
     void (*end_ep)       (void *self_, RngState *rngs, uint T);
     void (*reset)        (void *self_);
-    // why not
+    // why not. should be in svt but running short on time so its here
     char *name;
 } AgentVT;
 
@@ -44,7 +48,7 @@ void ResidualGrad_choose_action(void *self_, RngState *rngs, Elem *S, Elem *A,
                       &self->super.env->SVT_ACCESS fixed_action_space, A);
 }
 
-void ResidualGrad_update(void *self_, RngState *rngs,
+bool ResidualGrad_update(void *self_, RngState *rngs,
                          Elem *S, Elem *A, real R, Elem *nS,
                          uint t, bool is_terminal) {
     ResidualGrad *self = self_;
@@ -53,10 +57,30 @@ void ResidualGrad_update(void *self_, RngState *rngs,
     if (!is_terminal) {
         self->pi->VT_ACCESS choose_action(self->pi, rngs, nS, &self->nA);
         delta += self->gamma * Qtheta(self->qfn, nS, &self->nA);
+    }
+
+    #ifndef EVALUATE_GRADIENT_OF_TERMINAL_STATE
+    // the "correct" way: this added term should be 0 vector for terminal state
+    // but having it outside fixes some numerical stability issues.
+    // nA is will be copied from its last value.
+    if (!is_terminal)
+    #endif
+    {
         scaled_dQtheta_dtheta_addto_dvec(self->qfn, nS, &self->nA,
                                          -self->gamma, &self->g);
     }
+
     scaled_vec_addto_dvec(&self->g, self->alpha * delta, &self->qfn->theta);
+
+    // if (t % 100 == 0) {
+    //     printf("--- timestep %u\n", t);
+    //     print_expr(delta, "%.6f");
+    //     printf("g: ");
+    //     print_vec(&self->g);
+    //     printf("theta: ");
+    //     print_vec(&self->qfn->theta);
+    // }
+    return delta > DIVERGED_DELTA;
 }
 
 void ResidualGrad_reset(void *self_) {
@@ -121,7 +145,7 @@ void NatResidualGrad_choose_action(void *self_, RngState *rngs, Elem *S,
                       &self->super.env->SVT_ACCESS fixed_action_space, A);
 }
 
-void NatResidualGrad_update(void *self_, RngState *rngs,
+bool NatResidualGrad_update(void *self_, RngState *rngs,
                          Elem *S, Elem *A, real R, Elem *nS,
                          uint t, bool is_terminal) {
     NatResidualGrad *self = self_;
@@ -134,9 +158,15 @@ void NatResidualGrad_update(void *self_, RngState *rngs,
     if (!is_terminal) {
         self->pi->VT_ACCESS choose_action(self->pi, rngs, nS, &self->nA);
         delta += self->gamma * Qtheta(self->qfn, nS, &self->nA);
+    }
+    #ifndef EVALUATE_GRADIENT_OF_TERMINAL_STATE
+    // if (!is_terminal)
+    #endif
+    {
         scaled_dQtheta_dtheta_addto_dvec(self->qfn, nS, &self->nA,
                                          -self->gamma, &self->g);
     }
+
     // v = G^{-1}_{t-1} g_t
     dmat_mul_vec_writo_dvec(&self->Ginv, &self->g, &self->v);
 
@@ -150,6 +180,8 @@ void NatResidualGrad_update(void *self_, RngState *rngs,
 
     // update theta
     scaled_vec_addto_dvec(&self->v, self->alpha * delta, &self->qfn->theta);
+
+    return delta > DIVERGED_DELTA;
 }
 
 void NatResidualGrad_reset(void *self_) {
@@ -205,7 +237,7 @@ typedef struct {
     Vec g, v;
     Elem nA;
     real alpha, beta, gamma, errclip; // errclip has no effect for aem
-    bool aem; // set to true to absolute error metric
+    bool aem; // set to true to use absolute error metric
 } NatResidualGrad_ForgetfulG;
 
 void NatResidualGrad_ForgetfulG_start_ep(void *self_, RngState *rngs, Elem *S_0) {
@@ -225,7 +257,7 @@ void NatResidualGrad_ForgetfulG_choose_action(void *self_, RngState *rngs, Elem 
 #define DPR(x)
 int ttt = 0;
 
-void NatResidualGrad_ForgetfulG_update(void *self_, RngState *rngs,
+bool NatResidualGrad_ForgetfulG_update(void *self_, RngState *rngs,
                          Elem *S, Elem *A, real R, Elem *nS,
                          uint t, bool is_terminal) {
     DPR(printf("--------- update t=%u ------------\n", ttt++);)
@@ -242,9 +274,16 @@ void NatResidualGrad_ForgetfulG_update(void *self_, RngState *rngs,
     if (!is_terminal) {
         self->pi->VT_ACCESS choose_action(self->pi, rngs, nS, &self->nA);
         delta += self->gamma * Qtheta(self->qfn, nS, &self->nA);
+    }
+
+    #ifndef EVALUATE_GRADIENT_OF_TERMINAL_STATE
+        if (!is_terminal)
+    #endif
+    {
         scaled_dQtheta_dtheta_addto_dvec(self->qfn, nS, &self->nA,
                                          -self->gamma, &self->g);
     }
+
     // scale G by 1-beta first
     scale_mat(&self->Ginv, invcombeta);
 
@@ -279,6 +318,8 @@ void NatResidualGrad_ForgetfulG_update(void *self_, RngState *rngs,
         print_vec(&self->qfn->theta);
         getchar();
     )
+
+    return delta > DIVERGED_DELTA;
 }
 
 void NatResidualGrad_ForgetfulG_reset(void *self_) {
@@ -355,7 +396,7 @@ void SarsaLambda_choose_action(void *self_, RngState *rngs, Elem *S, Elem *A,
                       &self->super.env->SVT_ACCESS fixed_action_space, A);
 }
 uint qg = 0;
-void SarsaLambda_update(void *self_, RngState *rngs,
+bool SarsaLambda_update(void *self_, RngState *rngs,
                         Elem *S, Elem *A, real R, Elem *nS,
                         uint t, bool is_terminal) {
     SarsaLambda *self = self_;
@@ -368,6 +409,8 @@ void SarsaLambda_update(void *self_, RngState *rngs,
     scale_vec(&self->elig, self->gamma * self->lambda);
     dQtheta_dtheta_addto_dvec(self->qfn, S, A, &self->elig);
     scaled_vec_addto_dvec(&self->elig, self->alpha * delta, &self->qfn->theta);
+
+    return delta > DIVERGED_DELTA;
 }
 
 void SarsaLambda_reset(void *self_) {
@@ -434,31 +477,36 @@ void NatSarsaLambda_choose_action(void *self_, RngState *rngs,
     copy_elem_to_elem(&self->nA,
                       &self->super.env->SVT_ACCESS fixed_action_space, A);
 }
-uint qq = 0;
-void NatSarsaLambda_update(void *self_, RngState *rngs,
+
+bool NatSarsaLambda_update(void *self_, RngState *rngs,
                              Elem *S, Elem *A, real R, Elem *nS,
                              uint t, bool is_terminal) {
     NatSarsaLambda *self = self_;
     // calculte delta
     real delta = R - Qtheta(self->qfn, S, A);
+
+    // calculate g
+    dQtheta_dtheta_writo_vec(self->qfn, S, A, &self->g);
+
+    // update e
+    scale_vec(&self->elig, self->gamma*self->lambda);
+    ADD_DV_TO_DV(self->g, self->elig)
+
     if (!is_terminal) {
         self->pi->VT_ACCESS choose_action(self->pi, rngs, nS, &self->nA);
         delta += self->gamma * Qtheta(self->qfn, nS, &self->nA);
     }
 
+    #ifndef EVALUATE_GRADIENT_OF_TERMINAL_STATE
+    if (!is_terminal)
+    #endif
+    {
+        #if 1 // text description version if 1, pseudocode version if 0
+            scaled_dQtheta_dtheta_addto_dvec(self->qfn, nS, &self->nA,
+                                             -self->gamma, &self->g);
+        #endif
+    }
 
-
-    // calculate g
-    dQtheta_dtheta_writo_vec(self->qfn, S, A, &self->g);
-
-        // update e
-        scale_vec(&self->elig, self->gamma*self->lambda);
-        ADD_DV_TO_DV(self->g, self->elig)
-
-
-#if 1 // description version if 1, figures version if 0
-    scaled_dQtheta_dtheta_addto_dvec(self->qfn, nS, &self->nA, -self->gamma, &self->g);
-#endif
 
     // v = G^{-1} g
     dmat_mul_vec_writo_dvec(&self->Ginv, &self->g, &self->v);
@@ -467,29 +515,12 @@ void NatSarsaLambda_update(void *self_, RngState *rngs,
     real scale = -delta*delta
                 / (1 + delta*delta*inner_vec(&self->g, &self->v));
     scaled_self_outer_vec_addto_dmat(&self->v, scale, &self->Ginv);
-    qq++;
+
     // update theta with natural semigradient
     dmat_mul_vec_writo_dvec(&self->Ginv, &self->elig, &self->v);
-    real vmul = self->alpha*delta;
-    scaled_vec_addto_dvec(&self->v, vmul, &self->qfn->theta);
+    scaled_vec_addto_dvec(&self->v, self->alpha*delta, &self->qfn->theta);
 
-    if (0) {
-        real normv = sqrtf(inner_vec(&self->v, &self->v));
-        real normelig = sqrtf(inner_vec(&self->elig, &self->elig));
-        real bilin = inner_vec(&self->v, &self->elig);
-        print_mat(&self->Ginv);
-        printf(
-            // "delta=%.6f\t"
-            // "change=%.6f\t"
-            "L2(v)=%.6f\t"
-            "|v|/|elig|=%.6f\t"
-            "ang(v,elig)=%.6f\n",
-            // delta,
-            // QSA - Qtheta(self->qfn, S, A),
-            normv*vmul,
-            normv / normelig,
-            180/M_PI*acosf(bilin/(normv*normelig)));
-    }
+    return delta > DIVERGED_DELTA;
 }
 
 void reset_NatSarsaLambda(void *self_) {
@@ -540,3 +571,138 @@ void free_NatSarsaLambda(NatSarsaLambda *self) {
     free_mat(&self->Ginv);
     free_elem(&self->nA);
 }
+
+// -------------------- NatSarsaLambda_ForgetfulG ---------------------
+
+typedef struct {
+    Agent super;
+    QFn *qfn;
+    Policy *pi;
+    Mat Ginv;
+    Vec elig, g, v;
+    Elem nA;
+    real alpha, beta, gamma, lambda, errclip; // errclip has no effect for aem
+    bool aem; // set to true to use absolute error metric
+} NatSarsaLambda_ForgetfulG;
+
+void NatSarsaLambda_ForgetfulG_start_ep(void *self_, RngState *rngs, Elem *S_0) {
+    NatSarsaLambda_ForgetfulG *self = self_;
+    self->pi->VT_ACCESS choose_action(self->pi, rngs, S_0, &self->nA);
+}
+
+void NatSarsaLambda_ForgetfulG_end_ep(void *self_, RngState *rngs, uint T) {}
+
+void NatSarsaLambda_ForgetfulG_choose_action(void *self_, RngState *rngs, Elem *S,
+                                     Elem *A, uint t) {
+    NatSarsaLambda_ForgetfulG *self = self_;
+    copy_elem_to_elem(&self->nA,
+                      &self->super.env->SVT_ACCESS fixed_action_space, A);
+}
+
+bool NatSarsaLambda_ForgetfulG_update(void *self_, RngState *rngs,
+                         Elem *S, Elem *A, real R, Elem *nS,
+                         uint t, bool is_terminal) {
+    NatSarsaLambda_ForgetfulG *self = self_;
+    real QSA = Qtheta(self->qfn, S, A);
+    // convenience terms
+    real beta = self->beta;
+    real invcombeta = ((real)1.) / (((real)1.) - beta);
+
+    // delta_t = R_{t+1} + gamma * Q(S_{t+1}, A_{t+1}) - Q(S_t, A_t)
+    real delta = R - QSA;
+
+    // g_t = partial Q_theta(S_t, A_t)/partial theta
+    //     - gamma*partial Q_theta(S_{t+1}, A_{t+1})/partial theta
+    dQtheta_dtheta_writo_vec(self->qfn, S, A, &self->g);
+
+    // update e
+    scale_vec(&self->elig, self->gamma*self->lambda);
+    ADD_DV_TO_DV(self->g, self->elig)
+
+    if (!is_terminal) {
+        self->pi->VT_ACCESS choose_action(self->pi, rngs, nS, &self->nA);
+        delta += self->gamma * Qtheta(self->qfn, nS, &self->nA);
+    }
+
+    #ifndef EVALUATE_GRADIENT_OF_TERMINAL_STATE
+    if (!is_terminal)
+    #endif
+    {
+        scaled_dQtheta_dtheta_addto_dvec(self->qfn, nS, &self->nA,
+                                         -self->gamma, &self->g);
+    }
+
+
+    // scale G by 1-beta first
+    scale_mat(&self->Ginv, invcombeta);
+
+    // v = (1-beta) G^{-1}_{t-1} g_t
+    dmat_mul_vec_writo_dvec(&self->Ginv, &self->g, &self->v);
+
+    // update G^{-1} with Sherman-Morrison inverse
+    real a = beta;
+    if (!self->aem)
+        a *= rmax(self->errclip, delta * delta);
+    real scale = -a / (1 + a*inner_vec(&self->g, &self->v));
+    scaled_self_outer_vec_addto_dmat(&self->v, scale, &self->Ginv);
+
+    // v = G^{-1}_t e_t
+    dmat_mul_vec_writo_dvec(&self->Ginv, &self->elig, &self->v);
+    // print_vec(&self->v);
+
+    // update theta
+    scaled_vec_addto_dvec(&self->v, self->alpha * delta, &self->qfn->theta);
+
+    return delta > DIVERGED_DELTA;
+}
+
+void NatSarsaLambda_ForgetfulG_reset(void *self_) {
+    NatSarsaLambda_ForgetfulG *self = self_;
+    ZERO_DV(self->elig)
+    diag_mat_dmat(&self->Ginv, 1);
+    // qfn
+    ZERO_DV(self->qfn->theta)
+    // reset policy: we'll get to it when we get to it
+}
+
+AgentVT NatSarsaLambda_ForgetfulG_vt = {
+    .name = "Natural Sarsa(lambda) with Forgetful G",
+    .start_ep = NatSarsaLambda_ForgetfulG_start_ep,
+    .choose_action = NatSarsaLambda_ForgetfulG_choose_action,
+    .update = NatSarsaLambda_ForgetfulG_update,
+    .end_ep = NatSarsaLambda_ForgetfulG_end_ep,
+    .reset = NatSarsaLambda_ForgetfulG_reset
+};
+
+void make_NatSarsaLambda_ForgetfulG(NatSarsaLambda_ForgetfulG *self, Environment *env,
+                           QFn *qfn, Policy *pi, real alpha, real beta,
+                           real gamma, real lambda, bool aem, real errclip) {
+    self->super.vt = VT_PTR_AMPER NatSarsaLambda_ForgetfulG_vt;
+    self->super.env = env;
+    self->qfn = qfn;
+    self->pi = pi;
+    self->alpha = alpha;
+    self->beta = beta;
+    self->gamma = gamma;
+    self->lambda = lambda;
+    self->aem = aem;
+    self->errclip = errclip;
+    uint d = qfn->approx_arch->indim;
+    make_vec(&self->elig, d, 0);
+    make_vec(&self->g, d, 0);
+    make_vec(&self->v, d, 0);
+    make_mat(&self->Ginv, d, d, 0);
+    diag_mat_dmat(&self->Ginv, 1);
+    assert(env->SVT_ACCESS action_space_is_fixed);
+    assert(env->SVT_ACCESS deterministic_transition);
+    make_elem(&self->nA, &env->SVT_ACCESS fixed_action_space);
+}
+
+void free_NatSarsaLambda_ForgetfulG(NatSarsaLambda_ForgetfulG *self) {
+    free_vec(&self->elig);
+    free_vec(&self->g);
+    free_vec(&self->v);
+    free_mat(&self->Ginv);
+    free_elem(&self->nA);
+}
+

@@ -1,3 +1,4 @@
+#define MCAR_EXP_GAMMA 0.995
 
 void make_mcar_experiment(Environment **env, Agent **ag, uint agi,
                           HParam *hpt, bool search) {
@@ -27,30 +28,25 @@ void make_mcar_experiment(Environment **env, Agent **ag, uint agi,
     make_EpGreedy(epgreedy, (*env), qfn, hpt[0].r);
 
     switch (agi) {
-    case 0: {
-        ResidualGrad *rg = custom_malloc(sizeof *rg);
-        make_ResidualGrad(rg, *env, qfn, (Policy*)epgreedy,
-            hpt[1].r, hpt[2].r);
-        *ag = (Agent*) rg;
-    } break;
-    case 1: {
-        NatResidualGrad *qnrg = custom_malloc(sizeof *qnrg);
-        make_NatResidualGrad(qnrg, *env, qfn, (Policy*)epgreedy,
-            hpt[1].r, hpt[2].r);
-        *ag = (Agent*) qnrg;
-    } break;
-    case 2: {
-        SarsaLambda *sl = custom_malloc(sizeof *sl);
-        make_SarsaLambda(sl, *env, qfn, (Policy*)epgreedy,
-            hpt[1].r, hpt[2].r, hpt[3].r);
-        *ag = (Agent*) sl;
-    } break;
-    case 3: {
-        NatSarsaLambda *qnsl = custom_malloc(sizeof *qnsl);
-        make_NatSarsaLambda(qnsl, *env, qfn, (Policy*)epgreedy,
-            hpt[1].r, hpt[2].r, hpt[3].r);
-        *ag = (Agent*) qnsl;
-    } break;
+    #define AGENT(num, name, ...) \
+        case num: { \
+            name *the_ag = custom_malloc(sizeof *the_ag); \
+            make_ ## name (the_ag, *env, qfn, (Policy*)epgreedy, __VA_ARGS__); \
+            *ag = (Agent*) the_ag; \
+        } break;
+
+                                             // alpha     beta      gamma           lambda    aem  errclip
+        AGENT(0, ResidualGrad,                  hpt[1].r,           MCAR_EXP_GAMMA)
+        AGENT(1, NatResidualGrad,               hpt[1].r,           MCAR_EXP_GAMMA)
+        AGENT(2, NatResidualGrad_ForgetfulG,    hpt[1].r, hpt[2].r, MCAR_EXP_GAMMA,           0,   hpt[3].r)
+        AGENT(3, NatResidualGrad_ForgetfulG,    hpt[1].r, hpt[2].r, MCAR_EXP_GAMMA,           1,   0)
+
+        AGENT(4, SarsaLambda,                   hpt[1].r,           MCAR_EXP_GAMMA, hpt[2].r)
+        AGENT(5, NatSarsaLambda,                hpt[1].r,           MCAR_EXP_GAMMA, hpt[2].r)
+        AGENT(6, NatSarsaLambda_ForgetfulG,     hpt[1].r, hpt[2].r, MCAR_EXP_GAMMA, hpt[3].r, 0,   hpt[4].r)
+        AGENT(7, NatSarsaLambda_ForgetfulG,     hpt[1].r, hpt[2].r, MCAR_EXP_GAMMA, hpt[3].r, 1,   0)
+
+    #undef AGENT
     default:
         abort();
     }
@@ -60,30 +56,25 @@ void free_mcar_experiment(Environment *env_, Agent *ag_, uint agi) {
     EpGreedy *epgreedy;
     QFn *qfn;
     switch (agi) {
-    case 0: {
-        ResidualGrad *ag = (ResidualGrad*) ag_;
-        epgreedy = (EpGreedy*) ag->pi;
-        qfn = (QFn*) ag->qfn;
-        free_ResidualGrad(ag);
-    } break;
-    case 1: {
-        NatResidualGrad *ag = (NatResidualGrad*) ag_;
-        epgreedy = (EpGreedy*) ag->pi;
-        qfn = (QFn*) ag->qfn;
-        free_NatResidualGrad(ag);
-    } break;
-    case 2: {
-        SarsaLambda *ag = (SarsaLambda*) ag_;
-        epgreedy = (EpGreedy*) ag->pi;
-        qfn = (QFn*) ag->qfn;
-        free_SarsaLambda(ag);
-    } break;
-    case 3: {
-        NatSarsaLambda *ag = (NatSarsaLambda*) ag_;
-        epgreedy = (EpGreedy*) ag->pi;
-        qfn = (QFn*) ag->qfn;
-        free_NatSarsaLambda(ag);
-    } break;
+    #define EXTRACT_EPGREEDY_QFN(num, name) \
+        case num: { \
+                name *ag = (name*) ag_; \
+                epgreedy = (EpGreedy*) ag->pi; \
+                qfn = (QFn*) ag->qfn; \
+                free_ ## name (ag); \
+            } break;
+
+        EXTRACT_EPGREEDY_QFN(0, ResidualGrad)
+        EXTRACT_EPGREEDY_QFN(1, NatResidualGrad)
+        EXTRACT_EPGREEDY_QFN(2, NatResidualGrad_ForgetfulG)
+        EXTRACT_EPGREEDY_QFN(3, NatResidualGrad_ForgetfulG)
+
+        EXTRACT_EPGREEDY_QFN(4, SarsaLambda)
+        EXTRACT_EPGREEDY_QFN(5, NatSarsaLambda)
+        EXTRACT_EPGREEDY_QFN(6, NatSarsaLambda_ForgetfulG)
+        EXTRACT_EPGREEDY_QFN(7, NatSarsaLambda_ForgetfulG)
+
+    #undef EXTRACT_EPGREEDY_QFN
     default:
         abort();
     }
@@ -117,7 +108,7 @@ void free_mcar_experiment(Environment *env_, Agent *ag_, uint agi) {
 void mcar_exp_fb_vis(Environment *env_, Agent *ag_, Elem *S, Elem *A, float R,
                      Elem *nS, uint t, void *ep_) {
     // MountainCar *env = (void*)env_;
-    NatSarsaLambda *ag = (void*)ag_;
+    NatSarsaLambda *ag = (void*)ag_; // this is a hack
     uint ep = *(uint*)ep_;
     QFn *q = ag->qfn;
 
@@ -149,7 +140,7 @@ void mcar_exp_fb_vis(Environment *env_, Agent *ag_, Elem *S, Elem *A, float R,
                                    0);
             }
         }
-        al_build_transform(&Tr_text, 0, 0, 2, 2, 0);
+        al_build_transform(&Tr_text, 0, 0, 1, 1, 0);
 
         al_set_new_bitmap_format(QBMP_FORMAT);
         al_set_new_bitmap_flags(ALLEGRO_NO_PRESERVE_TEXTURE
@@ -182,8 +173,9 @@ void mcar_exp_fb_vis(Environment *env_, Agent *ag_, Elem *S, Elem *A, float R,
 
     // al_use_transform(&ID_TRANS);
     al_use_transform(&Tr_text);
-    al_draw_textf(font, WHITE, 15, 15, 0, "Episode: %u", ep);
-    al_draw_textf(font, WHITE, 15, 25, 0, "Time: %u", t);
+    al_draw_textf(font, WHITE, 15, 15, 0, "%s", ag_->VT_ACCESS name);
+    al_draw_textf(font, WHITE, 15, 25, 0, "Episode: %u", ep);
+    al_draw_textf(font, WHITE, 15, 35, 0, "Time: %u", t);
 
     // static float val_max = 8.f, val_min = -40.f;
     static float val_max = 0.f, val_min = -0.1f;
@@ -233,66 +225,127 @@ void mcar_exp_fb_vis(Environment *env_, Agent *ag_, Elem *S, Elem *A, float R,
     }
 
     al_flip_display();
+
+    // print_mat(&ag->Ginv);
+
+}
+
+Experiment mcar_exp;
+void print_mcar_ret(Environment *env_, Agent *ag_, Elem *S, Elem *A, float R,
+                     Elem *nS, uint t, void *ep_) {
+    uint ep = *(uint*)ep_;
+    static real ret = 0;
+    ret += R;
+    if (MountainCar_is_terminal(env_, nS, t)) {
+        fprintf(fp_ret, "%.6g%c", ret,
+          ep == mcar_exp.nepisodes - 1 ? '\n' : ',');
+        ret = 0;
+    }
 }
 
 // macros for convenience, since the ranges are similar anyway
-#define SEARCH_EPSILON {"eps", rand_exprange_writo,    {{.range={1e-5, 1.0}}, 'r'}}
-#define SEARCH_ALPHA   {"alp", rand_exprange_writo,    {{.range={1e-5, 1.0}}, 'r'}}
-#define SEARCH_GAMMA   {"gam", rand_1m_exprange_writo, {{.range={1e-5, 1.0}}, 'r'}}
-#define SEARCH_LAMBDA  {"lam", rand_1m_exprange_writo, {{.range={1e-5, 1.0}}, 'r'}}
-#define SEARCH_BETA    {"bet", rand_1m_exprange_writo, {{.range={1e-5, 1.0}}, 'r'}}
+#define SEARCH_EPSILON {"eps", rand_exprange_writo, {{.range={0.002, 0.2}}, 'r'}}
+#define SEARCH_ALPHA   {"alp", rand_exprange_writo, {{.range={1e-4, 0.2}}, 'r'}}
+#define SEARCH_BETA    {"bet", rand_exprange_writo, {{.range={1e-4, 0.2}}, 'r'}}
+// #define SEARCH_GAMMA   {"gam", rand_1m_exprange_writo, {{.range={1e-4, 1.0}}, 'r'}}
+#define SEARCH_LAMBDA  {"lam", rand_1m_exprange_writo, {{.range={1e-3, 1.0}}, 'r'}}
+#define SEARCH_ERRCLIP {"erc", rand_exprange_writo, {{.range={0.3, 5.0}}, 'r'}}
 
 Experiment mcar_exp = {
     .make_exp = make_mcar_experiment,
     .free_exp = free_mcar_experiment,
-    .visfn = mcar_exp_fb_vis,
-    .steps_per_vis = 1,
-    .flags = EXPERIMENT_VIS_REQUIRE_ALLEGRO,
+
+    #if 1 // visual demonstration
+        .visfn = mcar_exp_fb_vis,
+        .steps_per_vis = 1,
+        .flags = EXPERIMENT_VIS_REQUIRE_ALLEGRO
+            // | EXPERIMENT_RUN_GETCH
+        ,
+    #else // only print undiscounted return to file
+        .visfn = print_mcar_ret,
+        .steps_per_vis = 1,
+        .flags = 0,
+    #endif
 
     .nagents = 4,
     .nepisodes = 15,
-    .ntrials = 50000,
+    .ntrials = 3,
     .stuck_timesteps = MC_MAX_T,
 
-    .nsamples_hpts  = 500,
+    .nsamples_hpts  = 40000,
     .nepisodes_hpts = 20,
-    .ntrials_hpts   = 50,
+    .ntrials_hpts   = 1,
     .stuck_timesteps_hpt = MC_STOPSHORT_MAX_T,
     .hptss = (HParamsTupleSearch[]) {
         { // rg
-            .nhparams = 3,
+            .nhparams = 2,
             .hparam_search = (HParamSearch[]) {
-                SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_GAMMA,
+                SEARCH_EPSILON, SEARCH_ALPHA,
             }
         },
         { // nat rg
-            .nhparams = 3,
+            .nhparams = 2,
             .hparam_search = (HParamSearch[]) {
-                SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_GAMMA,
+                SEARCH_EPSILON, SEARCH_ALPHA,
             }
         },
-        { // sl
+        { // nat rg-fg w/ errclip
             .nhparams = 4,
             .hparam_search = (HParamSearch[]) {
-                SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_GAMMA, SEARCH_LAMBDA,
+                SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_BETA, SEARCH_ERRCLIP,
+            }
+        },
+        { // nat rg-faeg
+            .nhparams = 3,
+            .hparam_search = (HParamSearch[]) {
+                SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_BETA,
+            }
+        },
+        // ------------ Sarsa(lambda) based algorithms
+        { // sl
+            .nhparams = 3,
+            .hparam_search = (HParamSearch[]) {
+                SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_LAMBDA,
             }
         },
         { // nat sl
+            .nhparams = 3,
+            .hparam_search = (HParamSearch[]) {
+                SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_LAMBDA,
+            }
+        },
+        { // nat sl-fg w/ errclip
+            .nhparams = 5,
+            .hparam_search = (HParamSearch[]) {
+                SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_BETA, SEARCH_LAMBDA, SEARCH_ERRCLIP,
+            }
+        },
+        { // nat sl-faeg
             .nhparams = 4,
             .hparam_search = (HParamSearch[]) {
-                SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_GAMMA, SEARCH_LAMBDA,
+                SEARCH_EPSILON, SEARCH_ALPHA, SEARCH_BETA, SEARCH_LAMBDA,
             }
         },
     },
     .best_hpt_for_ag = (HParam*[]) {
-        // epsilon        // alpha         // gamma         // lambda         // beta
+        // epsilon        alpha            beta              lambda            errclip
         (HParam[]) // rg; mean ret=-249.42
-        {{.r=0.00022221}, {.r=0.16062324}, {.r=0.96570992}},
+        {{.r=0.00022221}, {.r=0.16062324}},
         (HParam[]) // nat rg; mean ret=-263.27
-        {{.r=0.00001640}, {.r=0.11993723}, {.r=0.98075956}},
+        {{.r=0.00001640}, {.r=0.11993723}},
+        (HParam[]) // nat rg-fg w/ errclip; mean ret=
+        {{.r=0.02}, {.r=0.005}, {.r=0.0001}, {.r=0.5}},
+        (HParam[]) // nat rg-faeg; mean ret=
+        {{.r=0.02}, {.r=0.005}, {.r=0.0001}},
+
+
         (HParam[]) // sl; mean ret=-193.29
-        {{.r=0.00047899}, {.r=0.09324095}, {.r=0.99973625}, {.r=0.22648823}},
+        {{.r=0.00047899}, {.r=0.09324095},                   {.r=0.22648823}},
         (HParam[]) // nat sl; mean ret=-142.66
-        {{.r=0.00049613}, {.r=0.17115353}, {.r=0.99950778}, {.r=0.00953287}},
+        {{.r=0.00049613}, {.r=0.17115353},                   {.r=0.00953287}},
+        (HParam[]) // nat sl-fg w/ errclip; mean ret=
+        {{.r=0.02}, {.r=0.002}, {.r=0.0001}, {.r=0.95}, {.r=0.5}},
+        (HParam[]) // nat sl-faeg; mean ret=
+        {{.r=0.02}, {.r=0.002}, {.r=0.0001}, {.r=0.95}},
     }
 };

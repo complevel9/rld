@@ -1,5 +1,8 @@
 // -------------------- Color maps -----------------------------
 
+// polynomials found using regression against matplotlib's colormaps.
+// compressed with parallel horner's method
+
 extern inline
 uint32_t cmap_inferno(float x1) {
     const float x2 = x1*x1;

@@ -103,7 +103,8 @@ void destroy_allegro() {
 
 // agent index list: select a list of agents instead of running all of them
 // terminate the list with 0
-#define AGI_LIST {3, 0}
+// #define AGI_LIST {0, 1, 2, 3, 0}
+#define AGI_LIST {4, 5, 6, 7, 0}
 
 #include "colormap.c"
 
@@ -144,22 +145,16 @@ int main(int argc, char **argv) {
         (timeseed+17829291823llu)*69696969696969llu + 420420420llu
     }};
 
-    #if 0
-        search_hpt(&mcar_exp, &rngs);
-    #endif // HYPERPARAM_SEARCH
 
-    // run_exp(&mcar_exp, &rngs);
-
-    FILE* fp = NULL;
-    // fp = stdout;
-    // fp = fopen("flip.csv", "w");
     fp_ret    = fopen("ret.csv",   "w");
     fp_theta  = fopen("theta.csv", "w");
     fp_metric = fopen("metric.csv", "w");
 
-    run_exp(&flip_exp, &rngs, fp);
+    // search_hpt(&mcar_exp, &rngs);
+    run_exp(&mcar_exp, &rngs, stdout);
 
-    // fclose(fp);
+    // run_exp(&flip_exp, &rngs, stdout);
+
     fclose(fp_ret);
     fclose(fp_theta);
     fclose(fp_metric);
